@@ -26,18 +26,10 @@ pd.set_option('display.max_colwidth', None)
 os.chdir('D:/neeco/rdc_census/acs_change_file/')
 intermediate_dir = 'D:/neeco/rdc_census/acs_change_file/intermediate/'
 
-# Paramters and Other Functions
-# ALAND takes 20 minutes for each year to read. What I do is run it once and export as a CSV.
-# If you're running for the first time, set parameter below to true. Otherwise, set it to False.
-aland_need_to_pull = False
+# Do you need to pull files?
+need_to_pull = False
 
-def add_leading_zero(value):
-	if len(value) == 11:
-		return '0' + value
-	else:
-		return value
-
-# Read in Data
+# Census API Key
 api_key = "4049ee84e96e784c0042da45d81f95514d53b7fd"
 c = Census(api_key)
 
@@ -47,6 +39,62 @@ IPUMS_API_KEY = os.environ.get("IPUMS_API_KEY")
 ipums = IpumsApiClient(IPUMS_API_KEY)
 DOWNLOAD_DIR = Path("D:/neeco/rdc_census/acs_change_file/intermediate/")
 
+
+# Helper Functions
+def add_leading_zero(value):
+	if len(value) == 11:
+		return '0' + value
+	else:
+		return value
+	
+def tract_add_trailing_zero(value):
+	if len(value) == 4:
+		return value + '00' 
+	elif len(value) == 5:
+		return value + '0' 
+	else:
+		return value
+	
+def county_add_leading_zero(value):
+	if len(value) == 1:
+		return '00' + value
+	elif len(value) == 2:
+		return '0' + value
+	else:
+		return value
+	
+def state_add_leading_zero(value):
+	if len(value) == 1:
+		return '0' + value
+	else:
+		return value
+	
+def year_bg_interpolate(df, bg_col, year_col, value_col):
+    """
+    Interpolates missing values in a DataFrame by year for each block group.
+
+    Args:
+        df (pd.DataFrame): The DataFrame with the data.
+        bg_col (str): The name of the block group column.
+        year_col (str): The name of the year column.
+        value_col (str): The name of the value column.
+
+    Returns:
+        pd.DataFrame: A new DataFrame with interpolated values.
+    """
+    # Ensure the year column is numeric
+    df[year_col] = pd.to_numeric(df[year_col], errors='coerce')
+    
+    # Pivot the table, interpolate, and unstack
+    interpolated_df = (
+        df.pivot(index=year_col, columns=bg_col, values=value_col)
+        .reindex(range(df[year_col].min(), df[year_col].max() + 1))
+        .interpolate('index')
+        .unstack(-1)
+		.reset_index(name=value_col)
+    )
+    
+    return interpolated_df
 
 # Get number of households and population by block group
 # Define variables to retrieve (Total Population - B01003_001E)
@@ -87,31 +135,37 @@ states_list = list(fips_lookup["state"])
 print("Getting total population by Census block...")
 
 # 2000
-extract = AggregateDataExtract(
-   collection="nhgis",
-   datasets=[
-      Dataset(name="2000_SF1b", data_tables=["NP001A"], geog_levels=["blck_grp"])
-   ]
-)
+if need_to_pull:
+	extract = AggregateDataExtract(
+	collection="nhgis",
+	datasets=[
+		Dataset(name="2000_SF1b", data_tables=["NP001A"], geog_levels=["blck_grp"])
+	]
+	)
 
-ipums.submit_extract(extract)
-ipums.wait_for_extract(extract)
-ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
+	ipums.submit_extract(extract)
+	ipums.wait_for_extract(extract)
+	ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
 
-list_of_files = glob.glob(intermediate_dir + "*")
-latest_file = max(list_of_files, key=os.path.getctime)
-latest_file_no_zip = latest_file[:-4]
+	list_of_files = glob.glob(intermediate_dir + "*")
+	latest_file = max(list_of_files, key=os.path.getctime)
+	latest_file_no_zip = latest_file[:-4]
 
-with zipfile.ZipFile(latest_file, 'r') as zip_ref:
-	zip_ref.extractall(intermediate_dir)
+	with zipfile.ZipFile(latest_file, 'r') as zip_ref:
+		zip_ref.extractall(intermediate_dir)
 
-os.rename(latest_file_no_zip, intermediate_dir + "pop2000")
-csv_file = glob.glob(intermediate_dir + "pop2000/" "*.csv")
-os.rename(csv_file[0], intermediate_dir + "pop2000/pop2000_load.csv")
-
+	os.rename(latest_file_no_zip, intermediate_dir + "pop2000")
+	csv_file = glob.glob(intermediate_dir + "pop2000/" "*.csv")
+	os.rename(csv_file[0], intermediate_dir + "pop2000/pop2000_load.csv")
+else:
+	pass
 pop2000_load = pd.read_csv(intermediate_dir + "pop2000/pop2000_load.csv")
-pop2000_load = pop2000_load[["GISJOIN", "FXS001", "STUSAB"]]
-pop2000_load["bg2000"] = pop2000_load["GISJOIN"].str[-12:]
+
+pop2000_load["state"] = pop2000_load["STATEA"].astype(str).str.zfill(2)
+pop2000_load["county"] = pop2000_load["COUNTYA"].astype(str).str.zfill(3)
+pop2000_load["tract"] = pop2000_load["TRACTA"].astype(str).str.zfill(6)
+pop2000_load["block_group"] = pop2000_load["BLCK_GRPA"].astype(str).str.zfill(1)
+pop2000_load["bg2000"] = pop2000_load["state"] + pop2000_load["county"] + pop2000_load["tract"] + pop2000_load["block_group"]
 pop2000_load = pop2000_load[["bg2000", "FXS001", "STUSAB"]]
 pop2000_load.columns = ["bg2000", "population", "state"]
 pop2000 = pop2000_load[pop2000_load['state'].isin(states_list)]
@@ -121,27 +175,30 @@ print(pop2000.head())
 print(pop2000.shape)
 
 # 2009
-extract = AggregateDataExtract(
-   collection="nhgis",
-   datasets=[
-      Dataset(name="2005_2009_ACS5a", data_tables=["B01003"], geog_levels=["blck_grp"])
-   ]
-)
+if need_to_pull:
+	extract = AggregateDataExtract(
+	collection="nhgis",
+	datasets=[
+		Dataset(name="2005_2009_ACS5a", data_tables=["B01003"], geog_levels=["blck_grp"])
+	]
+	)
 
-ipums.submit_extract(extract)
-ipums.wait_for_extract(extract)
-ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
+	ipums.submit_extract(extract)
+	ipums.wait_for_extract(extract)
+	ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
 
-list_of_files = glob.glob(intermediate_dir + "*")
-latest_file = max(list_of_files, key=os.path.getctime)
-latest_file_no_zip = latest_file[:-4]
+	list_of_files = glob.glob(intermediate_dir + "*")
+	latest_file = max(list_of_files, key=os.path.getctime)
+	latest_file_no_zip = latest_file[:-4]
 
-with zipfile.ZipFile(latest_file, 'r') as zip_ref:
-	zip_ref.extractall(intermediate_dir)
+	with zipfile.ZipFile(latest_file, 'r') as zip_ref:
+		zip_ref.extractall(intermediate_dir)
 
-os.rename(latest_file_no_zip, intermediate_dir + "pop2009")
-csv_file = glob.glob(intermediate_dir + "pop2009/" "*.csv")
-os.rename(csv_file[0], intermediate_dir + "pop2009/pop2009_load.csv")
+	os.rename(latest_file_no_zip, intermediate_dir + "pop2009")
+	csv_file = glob.glob(intermediate_dir + "pop2009/" "*.csv")
+	os.rename(csv_file[0], intermediate_dir + "pop2009/pop2009_load.csv")
+else:
+	pass
 
 pop2009_load = pd.read_csv(intermediate_dir + "pop2009/pop2009_load.csv")
 pop2009_load = pop2009_load[["GEOID", "RK9E001", "STUSAB"]]
@@ -153,28 +210,46 @@ pop2009["year"] = 2009
 print(pop2009.head())
 print(pop2009.shape)
 
+# Interpolate to get 2001 to 2008
+## Concatenate dataframes
+pop2000and2009 = pd.DataFrame(pd.concat([pop2000, pop2009]))
+## Get population from 2001 to 2009
+pop2000to2009 = year_bg_interpolate(pop2000and2009, "bg2000", "year", "population")
+## Filter to get population for each year
+pop2001 = pop2000to2009[pop2000to2009["year"] == 2001]
+pop2002 = pop2000to2009[pop2000to2009["year"] == 2002]
+pop2003 = pop2000to2009[pop2000to2009["year"] == 2003]
+pop2004 = pop2000to2009[pop2000to2009["year"] == 2004]
+pop2005 = pop2000to2009[pop2000to2009["year"] == 2005]
+pop2006 = pop2000to2009[pop2000to2009["year"] == 2006]
+pop2007 = pop2000to2009[pop2000to2009["year"] == 2007]
+pop2008 = pop2000to2009[pop2000to2009["year"] == 2008]
+
 # 2010
-extract = AggregateDataExtract(
-   collection="nhgis",
-   datasets=[
-      Dataset(name="2006_2010_ACS5a", data_tables=["B01003"], geog_levels=["blck_grp"])
-   ]
-)
+if need_to_pull:
+	extract = AggregateDataExtract(
+	collection="nhgis",
+	datasets=[
+		Dataset(name="2006_2010_ACS5a", data_tables=["B01003"], geog_levels=["blck_grp"])
+	]
+	)
 
-ipums.submit_extract(extract)
-ipums.wait_for_extract(extract)
-ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
+	ipums.submit_extract(extract)
+	ipums.wait_for_extract(extract)
+	ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
 
-list_of_files = glob.glob(intermediate_dir + "*")
-latest_file = max(list_of_files, key=os.path.getctime)
-latest_file_no_zip = latest_file[:-4]
+	list_of_files = glob.glob(intermediate_dir + "*")
+	latest_file = max(list_of_files, key=os.path.getctime)
+	latest_file_no_zip = latest_file[:-4]
 
-with zipfile.ZipFile(latest_file, 'r') as zip_ref:
-	zip_ref.extractall(intermediate_dir)
+	with zipfile.ZipFile(latest_file, 'r') as zip_ref:
+		zip_ref.extractall(intermediate_dir)
 
-os.rename(latest_file_no_zip, intermediate_dir + "pop2010")
-csv_file = glob.glob(intermediate_dir + "pop2010/" "*.csv")
-os.rename(csv_file[0], intermediate_dir + "pop2010/pop2010_load.csv")
+	os.rename(latest_file_no_zip, intermediate_dir + "pop2010")
+	csv_file = glob.glob(intermediate_dir + "pop2010/" "*.csv")
+	os.rename(csv_file[0], intermediate_dir + "pop2010/pop2010_load.csv")
+else:
+	pass
 
 pop2010_load = pd.read_csv(intermediate_dir + "pop2010/pop2010_load.csv")
 pop2010_load = pop2010_load[["GEOID", "JMAE001", "STUSAB"]]
@@ -187,27 +262,31 @@ print(pop2010.head())
 print(pop2010.shape)
 
 # 2011
-extract = AggregateDataExtract(
-   collection="nhgis",
-   datasets=[
-      Dataset(name="2007_2011_ACS5a", data_tables=["B01003"], geog_levels=["blck_grp"])
-   ]
-)
+if need_to_pull:
+	extract = AggregateDataExtract(
+	collection="nhgis",
+	datasets=[
+		Dataset(name="2007_2011_ACS5a", data_tables=["B01003"], geog_levels=["blck_grp"])
+	]
+	)
 
-ipums.submit_extract(extract)
-ipums.wait_for_extract(extract)
-ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
+	ipums.submit_extract(extract)
+	ipums.wait_for_extract(extract)
+	ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
 
-list_of_files = glob.glob(intermediate_dir + "*")
-latest_file = max(list_of_files, key=os.path.getctime)
-latest_file_no_zip = latest_file[:-4]
+	list_of_files = glob.glob(intermediate_dir + "*")
+	latest_file = max(list_of_files, key=os.path.getctime)
+	latest_file_no_zip = latest_file[:-4]
 
-with zipfile.ZipFile(latest_file, 'r') as zip_ref:
-	zip_ref.extractall(intermediate_dir)
+	with zipfile.ZipFile(latest_file, 'r') as zip_ref:
+		zip_ref.extractall(intermediate_dir)
 
-os.rename(latest_file_no_zip, intermediate_dir + "pop2011")
-csv_file = glob.glob(intermediate_dir + "pop2011/" "*.csv")
-os.rename(csv_file[0], intermediate_dir + "pop2011/pop2011_load.csv")
+	os.rename(latest_file_no_zip, intermediate_dir + "pop2011")
+	csv_file = glob.glob(intermediate_dir + "pop2011/" "*.csv")
+	os.rename(csv_file[0], intermediate_dir + "pop2011/pop2011_load.csv")
+
+else:
+	pass
 
 pop2011_load = pd.read_csv(intermediate_dir + "pop2011/pop2011_load.csv")
 pop2011_load = pop2011_load[["GEOID", "MNTE001", "STUSAB"]]
@@ -220,27 +299,30 @@ print(pop2011.head())
 print(pop2011.shape)
 
 # 2012
-extract = AggregateDataExtract(
-   collection="nhgis",
-   datasets=[
-      Dataset(name="2008_2012_ACS5a", data_tables=["B01003"], geog_levels=["blck_grp"])
-   ]
-)
+if need_to_pull:
+	extract = AggregateDataExtract(
+	collection="nhgis",
+	datasets=[
+		Dataset(name="2008_2012_ACS5a", data_tables=["B01003"], geog_levels=["blck_grp"])
+	]
+	)
 
-ipums.submit_extract(extract)
-ipums.wait_for_extract(extract)
-ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
+	ipums.submit_extract(extract)
+	ipums.wait_for_extract(extract)
+	ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
 
-list_of_files = glob.glob(intermediate_dir + "*")
-latest_file = max(list_of_files, key=os.path.getctime)
-latest_file_no_zip = latest_file[:-4]
+	list_of_files = glob.glob(intermediate_dir + "*")
+	latest_file = max(list_of_files, key=os.path.getctime)
+	latest_file_no_zip = latest_file[:-4]
 
-with zipfile.ZipFile(latest_file, 'r') as zip_ref:
-	zip_ref.extractall(intermediate_dir)
+	with zipfile.ZipFile(latest_file, 'r') as zip_ref:
+		zip_ref.extractall(intermediate_dir)
 
-os.rename(latest_file_no_zip, intermediate_dir + "pop2012")
-csv_file = glob.glob(intermediate_dir + "pop2012/" "*.csv")
-os.rename(csv_file[0], intermediate_dir + "pop2012/pop2012_load.csv")
+	os.rename(latest_file_no_zip, intermediate_dir + "pop2012")
+	csv_file = glob.glob(intermediate_dir + "pop2012/" "*.csv")
+	os.rename(csv_file[0], intermediate_dir + "pop2012/pop2012_load.csv")
+else:
+	pass
 
 pop2012_load = pd.read_csv(intermediate_dir + "pop2012/pop2012_load.csv")
 pop2012_load = pop2012_load[["GEOID", "QSPE001", "STUSAB"]]
@@ -458,31 +540,38 @@ print("Now getting non-Hispanic white population by Census block...")
 # Total White Population (Non-Hispanic)
 # Code: B030002
 # 2000
-extract = AggregateDataExtract(
-   collection="nhgis",
-   datasets=[
-      Dataset(name="2000_SF1b", data_tables=["NP008A"], geog_levels=["blck_grp"])
-   ]
-)
+if need_to_pull:
+	extract = AggregateDataExtract(
+	collection="nhgis",
+	datasets=[
+		Dataset(name="2000_SF1b", data_tables=["NP008A"], geog_levels=["blck_grp"])
+	]
+	)
 
-ipums.submit_extract(extract)
-ipums.wait_for_extract(extract)
-ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
+	ipums.submit_extract(extract)
+	ipums.wait_for_extract(extract)
+	ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
 
-list_of_files = glob.glob(intermediate_dir + "*")
-latest_file = max(list_of_files, key=os.path.getctime)
-latest_file_no_zip = latest_file[:-4]
+	list_of_files = glob.glob(intermediate_dir + "*")
+	latest_file = max(list_of_files, key=os.path.getctime)
+	latest_file_no_zip = latest_file[:-4]
 
-with zipfile.ZipFile(latest_file, 'r') as zip_ref:
-	zip_ref.extractall(intermediate_dir)
+	with zipfile.ZipFile(latest_file, 'r') as zip_ref:
+		zip_ref.extractall(intermediate_dir)
 
-os.rename(latest_file_no_zip, intermediate_dir + "pop_nhwhite2000")
-csv_file = glob.glob(intermediate_dir + "pop_nhwhite2000/" "*.csv")
-os.rename(csv_file[0], intermediate_dir + "pop_nhwhite2000/pop_nhwhite2000_load.csv")
+	os.rename(latest_file_no_zip, intermediate_dir + "pop_nhwhite2000")
+	csv_file = glob.glob(intermediate_dir + "pop_nhwhite2000/" "*.csv")
+	os.rename(csv_file[0], intermediate_dir + "pop_nhwhite2000/pop_nhwhite2000_load.csv")
+else:
+	pass
 
 pop_nhwhite2000_load = pd.read_csv(intermediate_dir + "pop_nhwhite2000/pop_nhwhite2000_load.csv")
-pop_nhwhite2000_load = pop_nhwhite2000_load[["GISJOIN", "FYF001", "STUSAB"]]
-pop_nhwhite2000_load["bg2000"] = pop_nhwhite2000_load["GISJOIN"].str[-12:]
+
+pop_nhwhite2000_load["state"] = pop_nhwhite2000_load["STATEA"].astype(str).str.zfill(2)
+pop_nhwhite2000_load["county"] = pop_nhwhite2000_load["COUNTYA"].astype(str).str.zfill(3)
+pop_nhwhite2000_load["tract"] = pop_nhwhite2000_load["TRACTA"].astype(str).str.zfill(6)
+pop_nhwhite2000_load["block_group"] = pop_nhwhite2000_load["BLCK_GRPA"].astype(str).str.zfill(1)
+pop_nhwhite2000_load["bg2000"] = pop_nhwhite2000_load["state"] + pop_nhwhite2000_load["county"] + pop_nhwhite2000_load["tract"] + pop_nhwhite2000_load["block_group"]
 pop_nhwhite2000_load = pop_nhwhite2000_load[["bg2000", "FYF001", "STUSAB"]]
 pop_nhwhite2000_load.columns = ["bg2000", "pop_nhwhite", "state"]
 pop_nhwhite2000 = pop_nhwhite2000_load[pop_nhwhite2000_load['state'].isin(states_list)]
@@ -492,27 +581,31 @@ print(pop_nhwhite2000.head())
 print(pop_nhwhite2000.shape)
 
 # 2009
-extract = AggregateDataExtract(
-   collection="nhgis",
-   datasets=[
-      Dataset(name="2005_2009_ACS5a", data_tables=["B03002"], geog_levels=["blck_grp"])
-   ]
-)
+if need_to_pull:
+	extract = AggregateDataExtract(
+	collection="nhgis",
+	datasets=[
+		Dataset(name="2005_2009_ACS5a", data_tables=["B03002"], geog_levels=["blck_grp"])
+	]
+	)
 
-ipums.submit_extract(extract)
-ipums.wait_for_extract(extract)
-ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
+	ipums.submit_extract(extract)
+	ipums.wait_for_extract(extract)
+	ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
 
-list_of_files = glob.glob(intermediate_dir + "*")
-latest_file = max(list_of_files, key=os.path.getctime)
-latest_file_no_zip = latest_file[:-4]
+	list_of_files = glob.glob(intermediate_dir + "*")
+	latest_file = max(list_of_files, key=os.path.getctime)
+	latest_file_no_zip = latest_file[:-4]
 
-with zipfile.ZipFile(latest_file, 'r') as zip_ref:
-	zip_ref.extractall(intermediate_dir)
+	with zipfile.ZipFile(latest_file, 'r') as zip_ref:
+		zip_ref.extractall(intermediate_dir)
 
-os.rename(latest_file_no_zip, intermediate_dir + "pop_nhwhite2009")
-csv_file = glob.glob(intermediate_dir + "pop_nhwhite2009/" "*.csv")
-os.rename(csv_file[0], intermediate_dir + "pop_nhwhite2009/pop_nhwhite2009_load.csv")
+	os.rename(latest_file_no_zip, intermediate_dir + "pop_nhwhite2009")
+	csv_file = glob.glob(intermediate_dir + "pop_nhwhite2009/" "*.csv")
+	os.rename(csv_file[0], intermediate_dir + "pop_nhwhite2009/pop_nhwhite2009_load.csv")
+
+else:
+	pass
 
 pop_nhwhite2009_load = pd.read_csv(intermediate_dir + "pop_nhwhite2009/pop_nhwhite2009_load.csv")
 pop_nhwhite2009_load = pop_nhwhite2009_load[["GEOID", "RLIE003", "STUSAB"]]
@@ -524,28 +617,47 @@ pop_nhwhite2009["year"] = 2009
 print(pop_nhwhite2009.head())
 print(pop_nhwhite2009.shape)
 
+# Interpolate to get 2001 to 2008
+## Concatenate dataframes
+pop_nhwhite2000and2009 = pd.DataFrame(pd.concat([pop_nhwhite2000, pop_nhwhite2009]))
+## Get pop_nhwhiteulation from 2001 to 2009
+pop_nhwhite2000to2009 = year_bg_interpolate(pop_nhwhite2000and2009, "bg2000", "year", "pop_nhwhite")
+## Filter to get pop_nhwhiteulation for each year
+pop_nhwhite2001 = pop_nhwhite2000to2009[pop_nhwhite2000to2009["year"] == 2001]
+pop_nhwhite2002 = pop_nhwhite2000to2009[pop_nhwhite2000to2009["year"] == 2002]
+pop_nhwhite2003 = pop_nhwhite2000to2009[pop_nhwhite2000to2009["year"] == 2003]
+pop_nhwhite2004 = pop_nhwhite2000to2009[pop_nhwhite2000to2009["year"] == 2004]
+pop_nhwhite2005 = pop_nhwhite2000to2009[pop_nhwhite2000to2009["year"] == 2005]
+pop_nhwhite2006 = pop_nhwhite2000to2009[pop_nhwhite2000to2009["year"] == 2006]
+pop_nhwhite2007 = pop_nhwhite2000to2009[pop_nhwhite2000to2009["year"] == 2007]
+pop_nhwhite2008 = pop_nhwhite2000to2009[pop_nhwhite2000to2009["year"] == 2008]
+
+
 # 2010
-extract = AggregateDataExtract(
-   collection="nhgis",
-   datasets=[
-      Dataset(name="2006_2010_ACS5a", data_tables=["B03002"], geog_levels=["blck_grp"])
-   ]
-)
+if need_to_pull:
+	extract = AggregateDataExtract(
+	collection="nhgis",
+	datasets=[
+		Dataset(name="2006_2010_ACS5a", data_tables=["B03002"], geog_levels=["blck_grp"])
+	]
+	)
 
-ipums.submit_extract(extract)
-ipums.wait_for_extract(extract)
-ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
+	ipums.submit_extract(extract)
+	ipums.wait_for_extract(extract)
+	ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
 
-list_of_files = glob.glob(intermediate_dir + "*")
-latest_file = max(list_of_files, key=os.path.getctime)
-latest_file_no_zip = latest_file[:-4]
+	list_of_files = glob.glob(intermediate_dir + "*")
+	latest_file = max(list_of_files, key=os.path.getctime)
+	latest_file_no_zip = latest_file[:-4]
 
-with zipfile.ZipFile(latest_file, 'r') as zip_ref:
-	zip_ref.extractall(intermediate_dir)
+	with zipfile.ZipFile(latest_file, 'r') as zip_ref:
+		zip_ref.extractall(intermediate_dir)
 
-os.rename(latest_file_no_zip, intermediate_dir + "pop_nhwhite2010")
-csv_file = glob.glob(intermediate_dir + "pop_nhwhite2010/" "*.csv")
-os.rename(csv_file[0], intermediate_dir + "pop_nhwhite2010/pop_nhwhite2010_load.csv")
+	os.rename(latest_file_no_zip, intermediate_dir + "pop_nhwhite2010")
+	csv_file = glob.glob(intermediate_dir + "pop_nhwhite2010/" "*.csv")
+	os.rename(csv_file[0], intermediate_dir + "pop_nhwhite2010/pop_nhwhite2010_load.csv")
+else:
+	pass
 
 pop_nhwhite2010_load = pd.read_csv(intermediate_dir + "pop_nhwhite2010/pop_nhwhite2010_load.csv")
 pop_nhwhite2010_load = pop_nhwhite2010_load[["GEOID", "JMJE003", "STUSAB"]]
@@ -558,28 +670,30 @@ print(pop_nhwhite2010.head())
 print(pop_nhwhite2010.shape)
 
 # 2011
-extract = AggregateDataExtract(
-   collection="nhgis",
-   datasets=[
-      Dataset(name="2007_2011_ACS5a", data_tables=["B03002"], geog_levels=["blck_grp"])
-   ]
-)
+if need_to_pull:
+	extract = AggregateDataExtract(
+	collection="nhgis",
+	datasets=[
+		Dataset(name="2007_2011_ACS5a", data_tables=["B03002"], geog_levels=["blck_grp"])
+	]
+	)
 
-ipums.submit_extract(extract)
-ipums.wait_for_extract(extract)
-ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
+	ipums.submit_extract(extract)
+	ipums.wait_for_extract(extract)
+	ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
 
-list_of_files = glob.glob(intermediate_dir + "*")
-latest_file = max(list_of_files, key=os.path.getctime)
-latest_file_no_zip = latest_file[:-4]
+	list_of_files = glob.glob(intermediate_dir + "*")
+	latest_file = max(list_of_files, key=os.path.getctime)
+	latest_file_no_zip = latest_file[:-4]
 
-with zipfile.ZipFile(latest_file, 'r') as zip_ref:
-	zip_ref.extractall(intermediate_dir)
+	with zipfile.ZipFile(latest_file, 'r') as zip_ref:
+		zip_ref.extractall(intermediate_dir)
 
-os.rename(latest_file_no_zip, intermediate_dir + "pop_nhwhite2011")
-csv_file = glob.glob(intermediate_dir + "pop_nhwhite2011/" "*.csv")
-os.rename(csv_file[0], intermediate_dir + "pop_nhwhite2011/pop_nhwhite2011_load.csv")
-
+	os.rename(latest_file_no_zip, intermediate_dir + "pop_nhwhite2011")
+	csv_file = glob.glob(intermediate_dir + "pop_nhwhite2011/" "*.csv")
+	os.rename(csv_file[0], intermediate_dir + "pop_nhwhite2011/pop_nhwhite2011_load.csv")
+else:
+	pass
 pop_nhwhite2011_load = pd.read_csv(intermediate_dir + "pop_nhwhite2011/pop_nhwhite2011_load.csv")
 pop_nhwhite2011_load = pop_nhwhite2011_load[["GEOID", "MN2E003", "STUSAB"]]
 pop_nhwhite2011_load.columns = ["bg2010", "pop_nhwhite", "state"]
@@ -591,28 +705,30 @@ print(pop_nhwhite2011.head())
 print(pop_nhwhite2011.shape)
 
 # 2012
-extract = AggregateDataExtract(
-   collection="nhgis",
-   datasets=[
-      Dataset(name="2008_2012_ACS5a", data_tables=["B03002"], geog_levels=["blck_grp"])
-   ]
-)
+if need_to_pull:
+	extract = AggregateDataExtract(
+	collection="nhgis",
+	datasets=[
+		Dataset(name="2008_2012_ACS5a", data_tables=["B03002"], geog_levels=["blck_grp"])
+	]
+	)
 
-ipums.submit_extract(extract)
-ipums.wait_for_extract(extract)
-ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
+	ipums.submit_extract(extract)
+	ipums.wait_for_extract(extract)
+	ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
 
-list_of_files = glob.glob(intermediate_dir + "*")
-latest_file = max(list_of_files, key=os.path.getctime)
-latest_file_no_zip = latest_file[:-4]
+	list_of_files = glob.glob(intermediate_dir + "*")
+	latest_file = max(list_of_files, key=os.path.getctime)
+	latest_file_no_zip = latest_file[:-4]
 
-with zipfile.ZipFile(latest_file, 'r') as zip_ref:
-	zip_ref.extractall(intermediate_dir)
+	with zipfile.ZipFile(latest_file, 'r') as zip_ref:
+		zip_ref.extractall(intermediate_dir)
 
-os.rename(latest_file_no_zip, intermediate_dir + "pop_nhwhite2012")
-csv_file = glob.glob(intermediate_dir + "pop_nhwhite2012/" "*.csv")
-os.rename(csv_file[0], intermediate_dir + "pop_nhwhite2012/pop_nhwhite2012_load.csv")
-
+	os.rename(latest_file_no_zip, intermediate_dir + "pop_nhwhite2012")
+	csv_file = glob.glob(intermediate_dir + "pop_nhwhite2012/" "*.csv")
+	os.rename(csv_file[0], intermediate_dir + "pop_nhwhite2012/pop_nhwhite2012_load.csv")
+else:
+	pass
 pop_nhwhite2012_load = pd.read_csv(intermediate_dir + "pop_nhwhite2012/pop_nhwhite2012_load.csv")
 pop_nhwhite2012_load = pop_nhwhite2012_load[["GEOID", "QSYE003", "STUSAB"]]
 pop_nhwhite2012_load.columns = ["bg2010", "pop_nhwhite", "state"]
@@ -827,41 +943,88 @@ print(pop_nhwhite2022.shape)
 print("Done getting non-Hispanic white population in each Census block group...")
 print("Now getting land area for each Census block group...")
 
-# 2000 Block Group Areas
+# 2000 Census Block Group Areas
+aland_load = []
+for i in fips_list:
+	aland_load.append(pd.DataFrame(pygris.block_groups(state=i, cb=True, cache=True, year = 2000)))
 
+aland2000_load = pd.concat(aland_load)
+aland2000_load = aland2000_load.reset_index()
+aland2000_load["TRACT"] = aland2000_load["TRACT"].apply(tract_add_trailing_zero)
+aland2000_load["bg2000"] = aland2000_load["STATE"] + aland2000_load["COUNTY"] + aland2000_load["TRACT"] + aland2000_load["BLKGROUP"]
+aland2000 = aland2000_load[["bg2000", "AREA"]]
+aland2000.columns = ["bg2000", "area_sqmi"]
+aland2000["area_acres"] = aland2000["area_sqmi"] * 640
+print(aland2000.head())
+print(aland2000.shape)
 
+# 2010 Census Block Group Areas
+aland_load = []
+for i in fips_list:
+	aland_load.append(pd.DataFrame(pygris.block_groups(state=i, cb=True, cache=True, year = 2010)))
+aland2010_load = pd.concat(aland_load)
+aland2010_load = aland2010_load.reset_index()
+aland2010 = aland2010_load[["GEO_ID", "CENSUSAREA"]]
+aland2010["bg2010"] = aland2010["GEO_ID"].str[-12:]
+aland2010["area_sqmi"] = aland2010["CENSUSAREA"]
+aland2010 = aland2010[["bg2010", "area_sqmi"]]
+aland2010["area_acres"] = aland2010["area_sqmi"] * 640
+print(aland2010.head())
+print(aland2010.shape)
 
+# 2020 Census Block Group Areas
+aland_load = []
+for i in fips_list:
+	aland_load.append(pd.DataFrame(pygris.block_groups(state=i, cb=True, cache=True, year = 2020)))
+
+aland2020_load = pd.concat(aland_load)
+aland2020_load = aland2020_load.reset_index()
+
+aland2020 = aland2020_load[["GEOID", "ALAND"]]
+aland2020.columns = ["bg2020", "area_sqmeters"]
+aland2020["area_sqmi"] = aland2020["area_sqmeters"] * (3.861 * (10**(-7)))
+aland2020["area_acres"] = aland2020["area_sqmi"] * 640
+aland2020 = aland2020[["bg2020", "area_sqmi", "area_acres"]]
+print(aland2020.head())
+print(aland2020.shape)
 
 
 # Get number of households for each Census block group
 # Code: B11001
 # 2000
-extract = AggregateDataExtract(
-   collection="nhgis",
-   datasets=[
-      Dataset(name="2000_SF1b", data_tables=["NP015A"], geog_levels=["blck_grp"])
-   ]
-)
+if need_to_pull:
+	extract = AggregateDataExtract(
+	collection="nhgis",
+	datasets=[
+		Dataset(name="2000_SF1b", data_tables=["NP015A"], geog_levels=["blck_grp"])
+	]
+	)
 
-ipums.submit_extract(extract)
-ipums.wait_for_extract(extract)
-ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
+	ipums.submit_extract(extract)
+	ipums.wait_for_extract(extract)
+	ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
 
-list_of_files = glob.glob(intermediate_dir + "*")
-latest_file = max(list_of_files, key=os.path.getctime)
-latest_file_no_zip = latest_file[:-4]
+	list_of_files = glob.glob(intermediate_dir + "*")
+	latest_file = max(list_of_files, key=os.path.getctime)
+	latest_file_no_zip = latest_file[:-4]
 
-with zipfile.ZipFile(latest_file, 'r') as zip_ref:
-	zip_ref.extractall(intermediate_dir)
+	with zipfile.ZipFile(latest_file, 'r') as zip_ref:
+		zip_ref.extractall(intermediate_dir)
 
-os.rename(latest_file_no_zip, intermediate_dir + "hh2000")
-csv_file = glob.glob(intermediate_dir + "hh2000/" "*.csv")
-os.rename(csv_file[0], intermediate_dir + "hh2000/hh2000_load.csv")
+	os.rename(latest_file_no_zip, intermediate_dir + "hh2000")
+	csv_file = glob.glob(intermediate_dir + "hh2000/" "*.csv")
+	os.rename(csv_file[0], intermediate_dir + "hh2000/hh2000_load.csv")
+else:
+	pass
 
 hh2000_load = pd.read_csv(intermediate_dir + "hh2000/hh2000_load.csv")
-hh2000_load = hh2000_load[["GISJOIN", "FY4001", "STUSAB"]]
+hh2000_load["state"] = hh2000_load["STATEA"].astype(str).str.zfill(2)
+hh2000_load["county"] = hh2000_load["COUNTYA"].astype(str).str.zfill(3)
+hh2000_load["tract"] = hh2000_load["TRACTA"].astype(str).str.zfill(6)
+hh2000_load["block_group"] = hh2000_load["BLCK_GRPA"].astype(str).str.zfill(1)
+hh2000_load["bg2000"] = hh2000_load["state"] + hh2000_load["county"] + hh2000_load["tract"] + hh2000_load["block_group"]
+hh2000_load = hh2000_load[["bg2000", "FY4001", "STUSAB"]]
 hh2000_load.columns = ["bg2000", "households", "state"]
-hh2000_load["bg2000"] = hh2000_load["bg2000"].str[-12:]
 hh2000 = hh2000_load[hh2000_load['state'].isin(states_list)]
 hh2000 = hh2000[["bg2000", "households"]]
 hh2000["year"] = 2000
@@ -870,27 +1033,30 @@ print(hh2000.shape)
 
 
 # 2009
-extract = AggregateDataExtract(
-   collection="nhgis",
-   datasets=[
-      Dataset(name="2005_2009_ACS5a", data_tables=["B11001"], geog_levels=["blck_grp"])
-   ]
-)
+if need_to_pull:
+	extract = AggregateDataExtract(
+	collection="nhgis",
+	datasets=[
+		Dataset(name="2005_2009_ACS5a", data_tables=["B11001"], geog_levels=["blck_grp"])
+	]
+	)
 
-ipums.submit_extract(extract)
-ipums.wait_for_extract(extract)
-ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
+	ipums.submit_extract(extract)
+	ipums.wait_for_extract(extract)
+	ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
 
-list_of_files = glob.glob(intermediate_dir + "*")
-latest_file = max(list_of_files, key=os.path.getctime)
-latest_file_no_zip = latest_file[:-4]
+	list_of_files = glob.glob(intermediate_dir + "*")
+	latest_file = max(list_of_files, key=os.path.getctime)
+	latest_file_no_zip = latest_file[:-4]
 
-with zipfile.ZipFile(latest_file, 'r') as zip_ref:
-	zip_ref.extractall(intermediate_dir)
+	with zipfile.ZipFile(latest_file, 'r') as zip_ref:
+		zip_ref.extractall(intermediate_dir)
 
-os.rename(latest_file_no_zip, intermediate_dir + "hh2009")
-csv_file = glob.glob(intermediate_dir + "hh2009/" "*.csv")
-os.rename(csv_file[0], intermediate_dir + "hh2009/hh2009_load.csv")
+	os.rename(latest_file_no_zip, intermediate_dir + "hh2009")
+	csv_file = glob.glob(intermediate_dir + "hh2009/" "*.csv")
+	os.rename(csv_file[0], intermediate_dir + "hh2009/hh2009_load.csv")
+else:
+	pass
 
 hh2009_load = pd.read_csv(intermediate_dir + "hh2009/hh2009_load.csv")
 hh2009_load = hh2009_load[["GEOID", "RL4E001", "STUSAB"]]
@@ -902,29 +1068,48 @@ hh2009["year"] = 2009
 print(hh2009.head())
 print(hh2009.shape)
 
+# Interpolate to get 2001 to 2008
+## Concatenate dataframes
+hh2000and2009 = pd.DataFrame(pd.concat([hh2000, hh2009]))
+## Get households from 2001 to 2009
+hh2000to2009 = year_bg_interpolate(hh2000and2009, "bg2000", "year", "households")
+## Filter to get households for each year
+hh2001 = hh2000to2009[hh2000to2009["year"] == 2001]
+hh2002 = hh2000to2009[hh2000to2009["year"] == 2002]
+hh2003 = hh2000to2009[hh2000to2009["year"] == 2003]
+hh2004 = hh2000to2009[hh2000to2009["year"] == 2004]
+hh2005 = hh2000to2009[hh2000to2009["year"] == 2005]
+hh2006 = hh2000to2009[hh2000to2009["year"] == 2006]
+hh2007 = hh2000to2009[hh2000to2009["year"] == 2007]
+hh2008 = hh2000to2009[hh2000to2009["year"] == 2008]
+
+
 # 2010
-extract = AggregateDataExtract(
-   collection="nhgis",
-   datasets=[
-      Dataset(name="2006_2010_ACS5a", data_tables=["B11001"], geog_levels=["blck_grp"])
-   ]
-)
+if need_to_pull:
+	extract = AggregateDataExtract(
+	collection="nhgis",
+	datasets=[
+		Dataset(name="2006_2010_ACS5a", data_tables=["B11001"], geog_levels=["blck_grp"])
+	]
+	)
 
-ipums.submit_extract(extract)
-ipums.wait_for_extract(extract)
-ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
+	ipums.submit_extract(extract)
+	ipums.wait_for_extract(extract)
+	ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
 
-list_of_files = glob.glob(intermediate_dir + "*")
-latest_file = max(list_of_files, key=os.path.getctime)
-latest_file_no_zip = latest_file[:-4]
+	list_of_files = glob.glob(intermediate_dir + "*")
+	latest_file = max(list_of_files, key=os.path.getctime)
+	latest_file_no_zip = latest_file[:-4]
 
-with zipfile.ZipFile(latest_file, 'r') as zip_ref:
-	zip_ref.extractall(intermediate_dir)
+	with zipfile.ZipFile(latest_file, 'r') as zip_ref:
+		zip_ref.extractall(intermediate_dir)
 
-os.rename(latest_file_no_zip, intermediate_dir + "hh2010")
-csv_file = glob.glob(intermediate_dir + "hh2010/" "*.csv")
-os.rename(csv_file[0], intermediate_dir + "hh2010/hh2010_load.csv")
+	os.rename(latest_file_no_zip, intermediate_dir + "hh2010")
+	csv_file = glob.glob(intermediate_dir + "hh2010/" "*.csv")
+	os.rename(csv_file[0], intermediate_dir + "hh2010/hh2010_load.csv")
 
+else:
+	pass
 hh2010_load = pd.read_csv(intermediate_dir + "hh2010/hh2010_load.csv")
 hh2010_load = hh2010_load[["GEOID", "JM5E001", "STUSAB"]]
 hh2010_load.columns = ["bg2010", "households", "state"]
@@ -935,30 +1120,31 @@ hh2010["year"] = 2010
 print(hh2010.head())
 print(hh2010.shape)
 
-
 # 2011
-extract = AggregateDataExtract(
-   collection="nhgis",
-   datasets=[
-      Dataset(name="2007_2011_ACS5a", data_tables=["B11001"], geog_levels=["blck_grp"])
-   ]
-)
+if need_to_pull:
+	extract = AggregateDataExtract(
+	collection="nhgis",
+	datasets=[
+		Dataset(name="2007_2011_ACS5a", data_tables=["B11001"], geog_levels=["blck_grp"])
+	]
+	)
 
-ipums.submit_extract(extract)
-ipums.wait_for_extract(extract)
-ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
+	ipums.submit_extract(extract)
+	ipums.wait_for_extract(extract)
+	ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
 
-list_of_files = glob.glob(intermediate_dir + "*")
-latest_file = max(list_of_files, key=os.path.getctime)
-latest_file_no_zip = latest_file[:-4]
+	list_of_files = glob.glob(intermediate_dir + "*")
+	latest_file = max(list_of_files, key=os.path.getctime)
+	latest_file_no_zip = latest_file[:-4]
 
-with zipfile.ZipFile(latest_file, 'r') as zip_ref:
-	zip_ref.extractall(intermediate_dir)
+	with zipfile.ZipFile(latest_file, 'r') as zip_ref:
+		zip_ref.extractall(intermediate_dir)
 
-os.rename(latest_file_no_zip, intermediate_dir + "hh2011")
-csv_file = glob.glob(intermediate_dir + "hh2011/" "*.csv")
-os.rename(csv_file[0], intermediate_dir + "hh2011/hh2011_load.csv")
-
+	os.rename(latest_file_no_zip, intermediate_dir + "hh2011")
+	csv_file = glob.glob(intermediate_dir + "hh2011/" "*.csv")
+	os.rename(csv_file[0], intermediate_dir + "hh2011/hh2011_load.csv")
+else:
+	pass
 hh2011_load = pd.read_csv(intermediate_dir + "hh2011/hh2011_load.csv")
 hh2011_load = hh2011_load[["GEOID", "MOOE001", "STUSAB"]]
 hh2011_load.columns = ["bg2010", "households", "state"]
@@ -970,28 +1156,30 @@ print(hh2011.head())
 print(hh2011.shape)
 
 # 2012
-extract = AggregateDataExtract(
-   collection="nhgis",
-   datasets=[
-      Dataset(name="2008_2012_ACS5a", data_tables=["B11001"], geog_levels=["blck_grp"])
-   ]
-)
+if need_to_pull:
+	extract = AggregateDataExtract(
+	collection="nhgis",
+	datasets=[
+		Dataset(name="2008_2012_ACS5a", data_tables=["B11001"], geog_levels=["blck_grp"])
+	]
+	)
 
-ipums.submit_extract(extract)
-ipums.wait_for_extract(extract)
-ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
+	ipums.submit_extract(extract)
+	ipums.wait_for_extract(extract)
+	ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
 
-list_of_files = glob.glob(intermediate_dir + "*")
-latest_file = max(list_of_files, key=os.path.getctime)
-latest_file_no_zip = latest_file[:-4]
+	list_of_files = glob.glob(intermediate_dir + "*")
+	latest_file = max(list_of_files, key=os.path.getctime)
+	latest_file_no_zip = latest_file[:-4]
 
-with zipfile.ZipFile(latest_file, 'r') as zip_ref:
-	zip_ref.extractall(intermediate_dir)
+	with zipfile.ZipFile(latest_file, 'r') as zip_ref:
+		zip_ref.extractall(intermediate_dir)
 
-os.rename(latest_file_no_zip, intermediate_dir + "hh2012")
-csv_file = glob.glob(intermediate_dir + "hh2012/" "*.csv")
-os.rename(csv_file[0], intermediate_dir + "hh2012/hh2012_load.csv")
-
+	os.rename(latest_file_no_zip, intermediate_dir + "hh2012")
+	csv_file = glob.glob(intermediate_dir + "hh2012/" "*.csv")
+	os.rename(csv_file[0], intermediate_dir + "hh2012/hh2012_load.csv")
+else:
+	pass
 hh2012_load = pd.read_csv(intermediate_dir + "hh2012/hh2012_load.csv")
 hh2012_load = hh2012_load[["GEOID", "QTME001", "STUSAB"]]
 hh2012_load.columns = ["bg2010", "households", "state"]
@@ -1011,7 +1199,7 @@ for i in fips_list:
 
 hh2013 = pd.concat(hh_by_state, ignore_index=True)
 
-# Create geoid column
+# Create bg2010 column
 hh2013["bg2010"] = hh2013["state"] + hh2013["county"] + \
 	hh2013["tract"] + hh2013["block group"]
 # Rename households column
@@ -1209,35 +1397,46 @@ print("Done getting number of households for each Census block...")
 print("Now getting median income in each Census block...")
 # Code: B19013E
 # 2000
-extract = AggregateDataExtract(
-   collection="nhgis",
-   datasets=[
-      Dataset(name="2000_SF3b", data_tables=["NP053A"], geog_levels=["blck_grp"])
-   ]
-)
+if need_to_pull:
+	extract = AggregateDataExtract(
+	collection="nhgis",
+	datasets=[
+		Dataset(name="2000_SF3b", data_tables=["NP053A"], geog_levels=["blck_grp"])
+	]
+	)
 
-ipums.submit_extract(extract)
-ipums.wait_for_extract(extract)
-ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
+	ipums.submit_extract(extract)
+	ipums.wait_for_extract(extract)
+	ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
 
-list_of_files = glob.glob(intermediate_dir + "*")
-latest_file = max(list_of_files, key=os.path.getctime)
-latest_file_no_zip = latest_file[:-4]
+	list_of_files = glob.glob(intermediate_dir + "*")
+	latest_file = max(list_of_files, key=os.path.getctime)
+	latest_file_no_zip = latest_file[:-4]
 
-with zipfile.ZipFile(latest_file, 'r') as zip_ref:
-	zip_ref.extractall(intermediate_dir)
+	with zipfile.ZipFile(latest_file, 'r') as zip_ref:
+		zip_ref.extractall(intermediate_dir)
 
-os.rename(latest_file_no_zip, intermediate_dir + "median_inc2000")
-csv_file = glob.glob(intermediate_dir + "median_inc2000/" "*.csv")
-os.rename(csv_file[0], intermediate_dir + "median_inc2000/median_inc2000_load.csv")
+	os.rename(latest_file_no_zip, intermediate_dir + "median_inc2000")
+	csv_file = glob.glob(intermediate_dir + "median_inc2000/" "*.csv")
+	os.rename(csv_file[0], intermediate_dir + "median_inc2000/median_inc2000_load.csv")
+else:
+	pass
 
 median_inc2000_load = pd.read_csv(intermediate_dir + "median_inc2000/median_inc2000_load.csv")
-median_inc2000_load = median_inc2000_load[["GISJOIN", "HF6001", "STUSAB"]]
-median_inc2000_load["bg2000"] = median_inc2000_load["GISJOIN"].str[-12:]
+median_inc2000_load["state"] = median_inc2000_load["STATEA"].astype(str).str.zfill(2)
+median_inc2000_load["county"] = median_inc2000_load["COUNTYA"].astype(str).str.zfill(3)
+median_inc2000_load["tract"] = median_inc2000_load["TRACTA"].astype(str).str.zfill(6)
+median_inc2000_load["block_group"] = median_inc2000_load["BLCK_GRPA"].astype(str).str.zfill(1)
+median_inc2000_load["bg2000"] = median_inc2000_load["state"] + median_inc2000_load["county"] + median_inc2000_load["tract"] + median_inc2000_load["block_group"]
 median_inc2000_load = median_inc2000_load[["bg2000", "HF6001", "STUSAB"]]
 median_inc2000_load.columns = ["bg2000", "median_income", "state"]
 median_inc2000 = median_inc2000_load[median_inc2000_load['state'].isin(states_list)]
 median_inc2000 = median_inc2000[["bg2000", "median_income"]]
+median_inc2000["year"] = 2000
+print(median_inc2000.head())
+print(median_inc2000.shape)
+
+
 # Adjust to 2022 Dollars
 # CPI: 2022 Income = 2009 Income * (2022 CPI / 2000 CPI), Apr 2022 CPI: 288.582, Apr 2000 CPI: 170.900
 median_inc2000["median_income_2022dollars"] = median_inc2000['median_income'] * (288.582 / 170.900)
@@ -1247,27 +1446,30 @@ print(median_inc2000.head())
 print(median_inc2000.shape)
 
 # 2009
-extract = AggregateDataExtract(
-   collection="nhgis",
-   datasets=[
-      Dataset(name="2005_2009_ACS5a", data_tables=["B19013"], geog_levels=["blck_grp"])
-   ]
-)
+if need_to_pull:
+	extract = AggregateDataExtract(
+	collection="nhgis",
+	datasets=[
+		Dataset(name="2005_2009_ACS5a", data_tables=["B19013"], geog_levels=["blck_grp"])
+	]
+	)
 
-ipums.submit_extract(extract)
-ipums.wait_for_extract(extract)
-ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
+	ipums.submit_extract(extract)
+	ipums.wait_for_extract(extract)
+	ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
 
-list_of_files = glob.glob(intermediate_dir + "*")
-latest_file = max(list_of_files, key=os.path.getctime)
-latest_file_no_zip = latest_file[:-4]
+	list_of_files = glob.glob(intermediate_dir + "*")
+	latest_file = max(list_of_files, key=os.path.getctime)
+	latest_file_no_zip = latest_file[:-4]
 
-with zipfile.ZipFile(latest_file, 'r') as zip_ref:
-	zip_ref.extractall(intermediate_dir)
+	with zipfile.ZipFile(latest_file, 'r') as zip_ref:
+		zip_ref.extractall(intermediate_dir)
 
-os.rename(latest_file_no_zip, intermediate_dir + "median_inc2009")
-csv_file = glob.glob(intermediate_dir + "median_inc2009/" "*.csv")
-os.rename(csv_file[0], intermediate_dir + "median_inc2009/median_inc2009_load.csv")
+	os.rename(latest_file_no_zip, intermediate_dir + "median_inc2009")
+	csv_file = glob.glob(intermediate_dir + "median_inc2009/" "*.csv")
+	os.rename(csv_file[0], intermediate_dir + "median_inc2009/median_inc2009_load.csv")
+else:
+	pass
 
 median_inc2009_load = pd.read_csv(intermediate_dir + "median_inc2009/median_inc2009_load.csv")
 median_inc2009_load = median_inc2009_load[["GEOID", "RNHE001", "STUSAB"]]
@@ -1285,28 +1487,46 @@ median_inc2009 = median_inc2009.loc[:, [
 print(median_inc2009.head())
 print(median_inc2009.shape)
 
+# Interpolate to get 2001 to 2008
+## Concatenate dataframes
+median_inc2000and2009 = pd.DataFrame(pd.concat([median_inc2000, median_inc2009]))
+## Get population from 2001 to 2009
+median_inc2000to2009 = year_bg_interpolate(median_inc2000and2009, "bg2000", "year", "median_income_2022dollars")
+## Filter to get median_inculation for each year
+median_inc2001 = median_inc2000to2009[median_inc2000to2009["year"] == 2001]
+median_inc2002 = median_inc2000to2009[median_inc2000to2009["year"] == 2002]
+median_inc2003 = median_inc2000to2009[median_inc2000to2009["year"] == 2003]
+median_inc2004 = median_inc2000to2009[median_inc2000to2009["year"] == 2004]
+median_inc2005 = median_inc2000to2009[median_inc2000to2009["year"] == 2005]
+median_inc2006 = median_inc2000to2009[median_inc2000to2009["year"] == 2006]
+median_inc2007 = median_inc2000to2009[median_inc2000to2009["year"] == 2007]
+median_inc2008 = median_inc2000to2009[median_inc2000to2009["year"] == 2008]
+
 # 2010
-extract = AggregateDataExtract(
-   collection="nhgis",
-   datasets=[
-      Dataset(name="2006_2010_ACS5a", data_tables=["B19013"], geog_levels=["blck_grp"])
-   ]
-)
+if need_to_pull:
+	extract = AggregateDataExtract(
+	collection="nhgis",
+	datasets=[
+		Dataset(name="2006_2010_ACS5a", data_tables=["B19013"], geog_levels=["blck_grp"])
+	]
+	)
 
-ipums.submit_extract(extract)
-ipums.wait_for_extract(extract)
-ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
+	ipums.submit_extract(extract)
+	ipums.wait_for_extract(extract)
+	ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
 
-list_of_files = glob.glob(intermediate_dir + "*")
-latest_file = max(list_of_files, key=os.path.getctime)
-latest_file_no_zip = latest_file[:-4]
+	list_of_files = glob.glob(intermediate_dir + "*")
+	latest_file = max(list_of_files, key=os.path.getctime)
+	latest_file_no_zip = latest_file[:-4]
 
-with zipfile.ZipFile(latest_file, 'r') as zip_ref:
-	zip_ref.extractall(intermediate_dir)
+	with zipfile.ZipFile(latest_file, 'r') as zip_ref:
+		zip_ref.extractall(intermediate_dir)
 
-os.rename(latest_file_no_zip, intermediate_dir + "median_inc2010")
-csv_file = glob.glob(intermediate_dir + "median_inc2010/" "*.csv")
-os.rename(csv_file[0], intermediate_dir + "median_inc2010/median_inc2010_load.csv")
+	os.rename(latest_file_no_zip, intermediate_dir + "median_inc2010")
+	csv_file = glob.glob(intermediate_dir + "median_inc2010/" "*.csv")
+	os.rename(csv_file[0], intermediate_dir + "median_inc2010/median_inc2010_load.csv")
+else:
+	pass
 
 median_inc2010_load = pd.read_csv(intermediate_dir + "median_inc2010/median_inc2010_load.csv")
 median_inc2010_load = median_inc2010_load[["GEOID", "JOIE001", "STUSAB"]]
@@ -1325,27 +1545,30 @@ print(median_inc2010.head())
 print(median_inc2010.shape)
 
 # 2011
-extract = AggregateDataExtract(
-   collection="nhgis",
-   datasets=[
-      Dataset(name="2007_2011_ACS5a", data_tables=["B19013"], geog_levels=["blck_grp"])
-   ]
-)
+if need_to_pull:
+	extract = AggregateDataExtract(
+	collection="nhgis",
+	datasets=[
+		Dataset(name="2007_2011_ACS5a", data_tables=["B19013"], geog_levels=["blck_grp"])
+	]
+	)
 
-ipums.submit_extract(extract)
-ipums.wait_for_extract(extract)
-ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
+	ipums.submit_extract(extract)
+	ipums.wait_for_extract(extract)
+	ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
 
-list_of_files = glob.glob(intermediate_dir + "*")
-latest_file = max(list_of_files, key=os.path.getctime)
-latest_file_no_zip = latest_file[:-4]
+	list_of_files = glob.glob(intermediate_dir + "*")
+	latest_file = max(list_of_files, key=os.path.getctime)
+	latest_file_no_zip = latest_file[:-4]
 
-with zipfile.ZipFile(latest_file, 'r') as zip_ref:
-	zip_ref.extractall(intermediate_dir)
+	with zipfile.ZipFile(latest_file, 'r') as zip_ref:
+		zip_ref.extractall(intermediate_dir)
 
-os.rename(latest_file_no_zip, intermediate_dir + "median_inc2011")
-csv_file = glob.glob(intermediate_dir + "median_inc2011/" "*.csv")
-os.rename(csv_file[0], intermediate_dir + "median_inc2011/median_inc2011_load.csv")
+	os.rename(latest_file_no_zip, intermediate_dir + "median_inc2011")
+	csv_file = glob.glob(intermediate_dir + "median_inc2011/" "*.csv")
+	os.rename(csv_file[0], intermediate_dir + "median_inc2011/median_inc2011_load.csv")
+else:
+	pass
 
 median_inc2011_load = pd.read_csv(intermediate_dir + "median_inc2011/median_inc2011_load.csv")
 median_inc2011_load = median_inc2011_load[["GEOID", "MP1E001", "STUSAB"]]
@@ -1364,34 +1587,37 @@ print(median_inc2011.head())
 print(median_inc2011.shape)
 
 # 2012
-extract = AggregateDataExtract(
-   collection="nhgis",
-   datasets=[
-      Dataset(name="2008_2012_ACS5a", data_tables=["B19013"], geog_levels=["blck_grp"])
-   ]
-)
+if need_to_pull:
+	extract = AggregateDataExtract(
+	collection="nhgis",
+	datasets=[
+		Dataset(name="2008_2012_ACS5a", data_tables=["B19013"], geog_levels=["blck_grp"])
+	]
+	)
 
-ipums.submit_extract(extract)
-ipums.wait_for_extract(extract)
-ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
+	ipums.submit_extract(extract)
+	ipums.wait_for_extract(extract)
+	ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
 
-list_of_files = glob.glob(intermediate_dir + "*")
-latest_file = max(list_of_files, key=os.path.getctime)
-latest_file_no_zip = latest_file[:-4]
+	list_of_files = glob.glob(intermediate_dir + "*")
+	latest_file = max(list_of_files, key=os.path.getctime)
+	latest_file_no_zip = latest_file[:-4]
 
-with zipfile.ZipFile(latest_file, 'r') as zip_ref:
-	zip_ref.extractall(intermediate_dir)
+	with zipfile.ZipFile(latest_file, 'r') as zip_ref:
+		zip_ref.extractall(intermediate_dir)
 
-os.rename(latest_file_no_zip, intermediate_dir + "median_inc2012")
-csv_file = glob.glob(intermediate_dir + "median_inc2012/" "*.csv")
-os.rename(csv_file[0], intermediate_dir + "median_inc2012/median_inc2012_load.csv")
-
+	os.rename(latest_file_no_zip, intermediate_dir + "median_inc2012")
+	csv_file = glob.glob(intermediate_dir + "median_inc2012/" "*.csv")
+	os.rename(csv_file[0], intermediate_dir + "median_inc2012/median_inc2012_load.csv")
+else:
+	pass
 median_inc2012_load = pd.read_csv(intermediate_dir + "median_inc2012/median_inc2012_load.csv")
 median_inc2012_load = median_inc2012_load[["GEOID", "QU1M001", "STUSAB"]]
 median_inc2012_load.columns = ["bg2010", "median_income", "state"]
 median_inc2012_load["bg2010"] = median_inc2012_load["bg2010"].str[-12:]
 median_inc2012 = median_inc2012_load[median_inc2012_load['state'].isin(states_list)]
 median_inc2012 = median_inc2012[["bg2010", "median_income"]]
+
 # Adjust to 2022 Dollars
 # CPI: 2022 Income = 2012 Income * (2022 CPI / 2012 CPI), Apr 2022 CPI: 288.582, Apr 2012 CPI: 229.187
 median_inc2012['median_income'] = pd.to_numeric(median_inc2012['median_income'], errors='coerce')
@@ -1410,8 +1636,8 @@ for i in fips_list:
 
 median_inc2013 = pd.concat(median_inc_by_state, ignore_index=True)
 
-# Create geoid column
-median_inc2013["geoid"] = median_inc2013["state"] + median_inc2013["county"] + \
+# Create bg2010 column
+median_inc2013["bg2010"] = median_inc2013["state"] + median_inc2013["county"] + \
 	median_inc2013["tract"] + median_inc2013["block group"]
 # Rename median income column
 median_inc2013 = median_inc2013.rename(
@@ -1424,7 +1650,7 @@ median_inc2013["median_income_2022dollars"] = median_inc2013["median_income"] * 
 median_inc2013["year"] = 2013
 # Keep relevant columns
 median_inc2013 = median_inc2013.loc[:, [
-	"geoid", "median_income_2022dollars", "year"]]
+	"bg2010", "median_income_2022dollars", "year"]]
 print(median_inc2013.head())
 print(median_inc2013.shape)
 
@@ -1436,8 +1662,8 @@ for i in fips_list:
 
 median_inc2014 = pd.concat(median_inc_by_state, ignore_index=True)
 
-# Create geoid column
-median_inc2014["geoid"] = median_inc2014["state"] + median_inc2014["county"] + \
+# Create bg2010 column
+median_inc2014["bg2010"] = median_inc2014["state"] + median_inc2014["county"] + \
 	median_inc2014["tract"] + median_inc2014["block group"]
 # Rename median income column
 median_inc2014 = median_inc2014.rename(
@@ -1450,7 +1676,7 @@ median_inc2014["median_income_2022dollars"] = median_inc2014["median_income"] * 
 median_inc2014["year"] = 2014
 # Keep relevant columns
 median_inc2014 = median_inc2014.loc[:, [
-	"geoid", "median_income_2022dollars", "year"]]
+	"bg2010", "median_income_2022dollars", "year"]]
 print(median_inc2014.head())
 print(median_inc2014.shape)
 
@@ -1462,8 +1688,8 @@ for i in fips_list:
 
 median_inc2015 = pd.concat(median_inc_by_state, ignore_index=True)
 
-# Create geoid column
-median_inc2015["geoid"] = median_inc2015["state"] + median_inc2015["county"] + \
+# Create bg2010 column
+median_inc2015["bg2010"] = median_inc2015["state"] + median_inc2015["county"] + \
 	median_inc2015["tract"] + median_inc2015["block group"]
 # Rename median income column
 median_inc2015 = median_inc2015.rename(
@@ -1476,7 +1702,7 @@ median_inc2015["median_income_2022dollars"] = median_inc2015["median_income"] * 
 median_inc2015["year"] = 2015
 # Keep relevant columns
 median_inc2015 = median_inc2015.loc[:, [
-	"geoid", "median_income_2022dollars", "year"]]
+	"bg2010", "median_income_2022dollars", "year"]]
 print(median_inc2015.head())
 print(median_inc2015.shape)
 
@@ -1488,8 +1714,8 @@ for i in fips_list:
 
 median_inc2016 = pd.concat(median_inc_by_state, ignore_index=True)
 
-# Create geoid column
-median_inc2016["geoid"] = median_inc2016["state"] + median_inc2016["county"] + \
+# Create bg2010 column
+median_inc2016["bg2010"] = median_inc2016["state"] + median_inc2016["county"] + \
 	median_inc2016["tract"] + median_inc2016["block group"]
 # Rename median_income column
 median_inc2016 = median_inc2016.rename(
@@ -1502,7 +1728,7 @@ median_inc2016["median_income_2022dollars"] = median_inc2016["median_income"] * 
 median_inc2016["year"] = 2016
 # Keep relevant columns
 median_inc2016 = median_inc2016.loc[:, [
-	"geoid", "median_income_2022dollars", "year"]]
+	"bg2010", "median_income_2022dollars", "year"]]
 print(median_inc2016.head())
 print(median_inc2016.shape)
 
@@ -1514,8 +1740,8 @@ for i in fips_list:
 
 median_inc2017 = pd.concat(median_inc_by_state, ignore_index=True)
 
-# Create geoid column
-median_inc2017["geoid"] = median_inc2017["state"] + median_inc2017["county"] + \
+# Create bg2010 column
+median_inc2017["bg2010"] = median_inc2017["state"] + median_inc2017["county"] + \
 	median_inc2017["tract"] + median_inc2017["block group"]
 # Rename median_income column
 median_inc2017 = median_inc2017.rename(
@@ -1528,7 +1754,7 @@ median_inc2017["median_income_2022dollars"] = median_inc2017["median_income"] * 
 median_inc2017["year"] = 2017
 # Keep relevant columns
 median_inc2017 = median_inc2017.loc[:, [
-	"geoid", "median_income_2022dollars", "year"]]
+	"bg2010", "median_income_2022dollars", "year"]]
 print(median_inc2017.head())
 print(median_inc2017.shape)
 
@@ -1540,8 +1766,8 @@ for i in fips_list:
 
 median_inc2018 = pd.concat(median_inc_by_state, ignore_index=True)
 
-# Create geoid column
-median_inc2018["geoid"] = median_inc2018["state"] + median_inc2018["county"] + \
+# Create bg2010 column
+median_inc2018["bg2010"] = median_inc2018["state"] + median_inc2018["county"] + \
 	median_inc2018["tract"] + median_inc2018["block group"]
 # Rename median_income column
 median_inc2018 = median_inc2018.rename(
@@ -1554,7 +1780,7 @@ median_inc2018["median_income_2022dollars"] = median_inc2018["median_income"] * 
 median_inc2018["year"] = 2018
 # Keep relevant columns
 median_inc2018 = median_inc2018.loc[:, [
-	"geoid", "median_income_2022dollars", "year"]]
+	"bg2010", "median_income_2022dollars", "year"]]
 print(median_inc2018.head())
 print(median_inc2018.shape)
 
@@ -1567,8 +1793,8 @@ for i in fips_list:
 
 median_inc2019 = pd.concat(median_inc_by_state, ignore_index=True)
 
-# Create geoid column
-median_inc2019["geoid"] = median_inc2019["state"] + median_inc2019["county"] + \
+# Create bg2010 column
+median_inc2019["bg2010"] = median_inc2019["state"] + median_inc2019["county"] + \
 	median_inc2019["tract"] + median_inc2019["block group"]
 # Rename median_income column
 median_inc2019 = median_inc2019.rename(
@@ -1581,7 +1807,7 @@ median_inc2019["median_income_2022dollars"] = median_inc2019["median_income"] * 
 median_inc2019["year"] = 2019
 # Keep relevant columns
 median_inc2019 = median_inc2019.loc[:, [
-	"geoid", "median_income_2022dollars", "year"]]
+	"bg2010", "median_income_2022dollars", "year"]]
 print(median_inc2019.head())
 print(median_inc2019.shape)
 
@@ -1593,8 +1819,8 @@ for i in fips_list:
 
 median_inc2020 = pd.concat(median_inc_by_state, ignore_index=True)
 
-# Create geoid column
-median_inc2020["geoid"] = median_inc2020["state"] + median_inc2020["county"] + \
+# Create bg2020 column
+median_inc2020["bg2020"] = median_inc2020["state"] + median_inc2020["county"] + \
 	median_inc2020["tract"] + median_inc2020["block group"]
 # Rename median_income column
 median_inc2020 = median_inc2020.rename(
@@ -1607,7 +1833,7 @@ median_inc2020["median_income_2022dollars"] = median_inc2020["median_income"] * 
 median_inc2020["year"] = 2020
 # Keep relevant columns
 median_inc2020 = median_inc2020.loc[:, [
-	"geoid", "median_income_2022dollars", "year"]]
+	"bg2020", "median_income_2022dollars", "year"]]
 print(median_inc2020.head())
 print(median_inc2020.shape)
 
@@ -1619,8 +1845,8 @@ for i in fips_list:
 
 median_inc2021 = pd.concat(median_inc_by_state, ignore_index=True)
 
-# Create geoid column
-median_inc2021["geoid"] = median_inc2021["state"] + median_inc2021["county"] + \
+# Create bg2020 column
+median_inc2021["bg2020"] = median_inc2021["state"] + median_inc2021["county"] + \
 	median_inc2021["tract"] + median_inc2021["block group"]
 # Rename median_income column
 median_inc2021 = median_inc2021.rename(
@@ -1633,7 +1859,7 @@ median_inc2021["median_income_2022dollars"] = median_inc2021["median_income"] * 
 median_inc2021["year"] = 2021
 # Keep relevant columns
 median_inc2021 = median_inc2021.loc[:, [
-	"geoid", "median_income_2022dollars", "year"]]
+	"bg2020", "median_income_2022dollars", "year"]]
 print(median_inc2021.head())
 print(median_inc2021.shape)
 
@@ -1645,8 +1871,8 @@ for i in fips_list:
 
 median_inc2022 = pd.concat(median_inc_by_state, ignore_index=True)
 
-# Create geoid column
-median_inc2022["geoid"] = median_inc2022["state"] + median_inc2022["county"] + \
+# Create bg2020 column
+median_inc2022["bg2020"] = median_inc2022["state"] + median_inc2022["county"] + \
 	median_inc2022["tract"] + median_inc2022["block group"]
 # Rename median_income column
 median_inc2022 = median_inc2022.rename(
@@ -1655,7 +1881,7 @@ median_inc2022 = median_inc2022.rename(
 median_inc2022["year"] = 2022
 # Keep relevant columns
 median_inc2022 = median_inc2022.loc[:, [
-	"geoid", "median_income_2022dollars", "year"]]
+	"bg2020", "median_income_2022dollars", "year"]]
 print(median_inc2022.head())
 print(median_inc2022.shape)
 
@@ -1663,22 +1889,244 @@ print("Done getting median income in each Census block...")
 print("Now combining it all together...")
 # Combine Data Together
 # Population, Households, Median Income, White Population, Land Area
+# 2000
+pop2000.shape
+hh2000.shape
+median_inc2000.shape
+pop_nhwhite2000.shape
+aland2000.shape
+
+acs2000 = pop2000.merge(hh2000, on=['bg2000', 'year'], how='left').merge(median_inc2000, on=['bg2000', 'year'], how='left').merge(
+	pop_nhwhite2000, on=['bg2000', 'year'], how="left").merge(aland2000, on=['bg2000'],  how="left")
+acs2000['pop_den_acre'] = acs2000["population"] / acs2000["area_acres"]
+acs2000['hh_den_acre'] = acs2000["households"] / acs2000["area_acres"]
+acs2000['pct_minority'] = 1 - (acs2000["pop_nhwhite"] / acs2000["population"])
+acs2000 = acs2000[["bg2000", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2000.head())
+print(acs2000.shape)
+acs2000.to_csv("./outputs/acs2000.csv", index = False)
+
+# 2001
+pop2001.shape
+hh2001.shape
+median_inc2001.shape
+pop_nhwhite2001.shape
+aland2000.shape
+
+acs2001 = pop2001.merge(hh2001, on=['bg2000', 'year'], how='left').merge(median_inc2001, on=['bg2000', 'year'], how='left').merge(
+	pop_nhwhite2001, on=['bg2000', 'year'], how="left").merge(aland2000, on=['bg2000'],  how="left")
+acs2001['pop_den_acre'] = acs2001["population"] / acs2001["area_acres"]
+acs2001['hh_den_acre'] = acs2001["households"] / acs2001["area_acres"]
+acs2001['pct_minority'] = 1 - (acs2001["pop_nhwhite"] / acs2001["population"])
+acs2001 = acs2001[["bg2000", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2001.head())
+print(acs2001.shape)
+acs2001.to_csv("./outputs/acs2001.csv", index = False)
+
+# 2002
+pop2002.shape
+hh2002.shape
+median_inc2002.shape
+pop_nhwhite2002.shape
+aland2000.shape
+
+acs2002 = pop2002.merge(hh2002, on=['bg2000', 'year'], how='left').merge(median_inc2002, on=['bg2000', 'year'], how='left').merge(
+	pop_nhwhite2002, on=['bg2000', 'year'], how="left").merge(aland2000, on=['bg2000'],  how="left")
+acs2002['pop_den_acre'] = acs2002["population"] / acs2002["area_acres"]
+acs2002['hh_den_acre'] = acs2002["households"] / acs2002["area_acres"]
+acs2002['pct_minority'] = 1 - (acs2002["pop_nhwhite"] / acs2002["population"])
+acs2002 = acs2002[["bg2000", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2002.head())
+print(acs2002.shape)
+acs2002.to_csv("./outputs/acs2002.csv", index = False)
+
+# 2003
+pop2003.shape
+hh2003.shape
+median_inc2003.shape
+pop_nhwhite2003.shape
+aland2000.shape
+
+acs2003 = pop2003.merge(hh2003, on=['bg2000', 'year'], how='left').merge(median_inc2003, on=['bg2000', 'year'], how='left').merge(
+	pop_nhwhite2003, on=['bg2000', 'year'], how="left").merge(aland2000, on=['bg2000'],  how="left")
+acs2003['pop_den_acre'] = acs2003["population"] / acs2003["area_acres"]
+acs2003['hh_den_acre'] = acs2003["households"] / acs2003["area_acres"]
+acs2003['pct_minority'] = 1 - (acs2003["pop_nhwhite"] / acs2003["population"])
+acs2003 = acs2003[["bg2000", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2003.head())
+print(acs2003.shape)
+acs2003.to_csv("./outputs/acs2003.csv", index = False)
+
+# 2004
+pop2004.shape
+hh2004.shape
+median_inc2004.shape
+pop_nhwhite2004.shape
+aland2000.shape
+
+acs2004 = pop2004.merge(hh2004, on=['bg2000', 'year'], how='left').merge(median_inc2004, on=['bg2000', 'year'], how='left').merge(
+	pop_nhwhite2004, on=['bg2000', 'year'], how="left").merge(aland2000, on=['bg2000'],  how="left")
+acs2004['pop_den_acre'] = acs2004["population"] / acs2004["area_acres"]
+acs2004['hh_den_acre'] = acs2004["households"] / acs2004["area_acres"]
+acs2004['pct_minority'] = 1 - (acs2004["pop_nhwhite"] / acs2004["population"])
+acs2004 = acs2004[["bg2000", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2004.head())
+print(acs2004.shape)
+acs2004.to_csv("./outputs/acs2004.csv", index = False)
+
+# 2005
+pop2005.shape
+hh2005.shape
+median_inc2005.shape
+pop_nhwhite2005.shape
+aland2000.shape
+
+acs2005 = pop2005.merge(hh2005, on=['bg2000', 'year'], how='left').merge(median_inc2005, on=['bg2000', 'year'], how='left').merge(
+	pop_nhwhite2005, on=['bg2000', 'year'], how="left").merge(aland2000, on=['bg2000'],  how="left")
+acs2005['pop_den_acre'] = acs2005["population"] / acs2005["area_acres"]
+acs2005['hh_den_acre'] = acs2005["households"] / acs2005["area_acres"]
+acs2005['pct_minority'] = 1 - (acs2005["pop_nhwhite"] / acs2005["population"])
+acs2005 = acs2005[["bg2000", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2005.head())
+print(acs2005.shape)
+acs2005.to_csv("./outputs/acs2005.csv", index = False)
+
+# 2006
+pop2006.shape
+hh2006.shape
+median_inc2006.shape
+pop_nhwhite2006.shape
+aland2000.shape
+
+acs2006 = pop2006.merge(hh2006, on=['bg2000', 'year'], how='left').merge(median_inc2006, on=['bg2000', 'year'], how='left').merge(
+	pop_nhwhite2006, on=['bg2000', 'year'], how="left").merge(aland2000, on=['bg2000'],  how="left")
+acs2006['pop_den_acre'] = acs2006["population"] / acs2006["area_acres"]
+acs2006['hh_den_acre'] = acs2006["households"] / acs2006["area_acres"]
+acs2006['pct_minority'] = 1 - (acs2006["pop_nhwhite"] / acs2006["population"])
+acs2006 = acs2006[["bg2000", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2006.head())
+print(acs2006.shape)
+acs2006.to_csv("./outputs/acs2006.csv", index = False)
+
+# 2007
+pop2007.shape
+hh2007.shape
+median_inc2007.shape
+pop_nhwhite2007.shape
+aland2000.shape
+
+acs2007 = pop2007.merge(hh2007, on=['bg2000', 'year'], how='left').merge(median_inc2007, on=['bg2000', 'year'], how='left').merge(
+	pop_nhwhite2007, on=['bg2000', 'year'], how="left").merge(aland2000, on=['bg2000'],  how="left")
+acs2007['pop_den_acre'] = acs2007["population"] / acs2007["area_acres"]
+acs2007['hh_den_acre'] = acs2007["households"] / acs2007["area_acres"]
+acs2007['pct_minority'] = 1 - (acs2007["pop_nhwhite"] / acs2007["population"])
+acs2007 = acs2007[["bg2000", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2007.head())
+print(acs2007.shape)
+acs2007.to_csv("./outputs/acs2007.csv", index = False)
+
+# 2008
+pop2008.shape
+hh2008.shape
+median_inc2008.shape
+pop_nhwhite2008.shape
+aland2000.shape
+
+acs2008 = pop2008.merge(hh2008, on=['bg2000', 'year'], how='left').merge(median_inc2008, on=['bg2000', 'year'], how='left').merge(
+	pop_nhwhite2008, on=['bg2000', 'year'], how="left").merge(aland2000, on=['bg2000'],  how="left")
+acs2008['pop_den_acre'] = acs2008["population"] / acs2008["area_acres"]
+acs2008['hh_den_acre'] = acs2008["households"] / acs2008["area_acres"]
+acs2008['pct_minority'] = 1 - (acs2008["pop_nhwhite"] / acs2008["population"])
+acs2008 = acs2008[["bg2000", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2008.head())
+print(acs2008.shape)
+acs2008.to_csv("./outputs/acs2008.csv", index = False)
+
+# 2009
+pop2009.shape
+hh2009.shape
+median_inc2009.shape
+pop_nhwhite2009.shape
+aland2000.shape
+
+acs2009 = pop2009.merge(hh2009, on=['bg2000', 'year'], how='left').merge(median_inc2009, on=['bg2000', 'year'], how='left').merge(
+	pop_nhwhite2009, on=['bg2000', 'year'], how="left").merge(aland2000, on=['bg2000'],  how="left")
+acs2009['pop_den_acre'] = acs2009["population"] / acs2009["area_acres"]
+acs2009['hh_den_acre'] = acs2009["households"] / acs2009["area_acres"]
+acs2009['pct_minority'] = 1 - (acs2009["pop_nhwhite"] / acs2009["population"])
+acs2009 = acs2009[["bg2000", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2009.head())
+print(acs2009.shape)
+acs2009.to_csv("./outputs/acs2009.csv", index = False)
+
+# 2010
+pop2010.shape
+hh2010.shape
+median_inc2010.shape
+pop_nhwhite2010.shape
+aland2000.shape
+
+acs2010 = pop2010.merge(hh2010, on=['bg2010', 'year'], how='left').merge(median_inc2010, on=['bg2010', 'year'], how='left').merge(
+	pop_nhwhite2010, on=['bg2010', 'year'], how="left").merge(aland2010, on=['bg2010'],  how="left")
+acs2010['pop_den_acre'] = acs2010["population"] / acs2010["area_acres"]
+acs2010['hh_den_acre'] = acs2010["households"] / acs2010["area_acres"]
+acs2010['pct_minority'] = 1 - (acs2010["pop_nhwhite"] / acs2010["population"])
+acs2010 = acs2010[["bg2010", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2010.head())
+print(acs2010.shape)
+acs2010.to_csv("./outputs/acs2010.csv", index = False)
+
+# 2011
+pop2011.shape
+hh2011.shape
+median_inc2011.shape
+pop_nhwhite2011.shape
+aland2000.shape
+
+acs2011 = pop2011.merge(hh2011, on=['bg2010', 'year'], how='left').merge(median_inc2011, on=['bg2010', 'year'], how='left').merge(
+	pop_nhwhite2011, on=['bg2010', 'year'], how="left").merge(aland2010, on=['bg2010'],  how="left")
+acs2011['pop_den_acre'] = acs2011["population"] / acs2011["area_acres"]
+acs2011['hh_den_acre'] = acs2011["households"] / acs2011["area_acres"]
+acs2011['pct_minority'] = 1 - (acs2011["pop_nhwhite"] / acs2011["population"])
+acs2011 = acs2011[["bg2010", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2011.head())
+print(acs2011.shape)
+acs2011.to_csv("./outputs/acs2011.csv", index = False)
+
+# 2012
+pop2012.shape
+hh2012.shape
+median_inc2012.shape
+pop_nhwhite2012.shape
+aland2000.shape
+
+acs2012 = pop2012.merge(hh2012, on=['bg2010', 'year'], how='left').merge(median_inc2012, on=['bg2010', 'year'], how='left').merge(
+	pop_nhwhite2012, on=['bg2010', 'year'], how="left").merge(aland2010, on=['bg2010'],  how="left")
+acs2012['pop_den_acre'] = acs2012["population"] / acs2012["area_acres"]
+acs2012['hh_den_acre'] = acs2012["households"] / acs2012["area_acres"]
+acs2012['pct_minority'] = 1 - (acs2012["pop_nhwhite"] / acs2012["population"])
+acs2012 = acs2012[["bg2010", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2012.head())
+print(acs2012.shape)
+acs2012.to_csv("./outputs/acs2012.csv", index = False)
+
+
 
 # 2013
 pop2013.shape
 hh2013.shape
 median_inc2013.shape
 pop_nhwhite2013.shape
-aland2013.shape
+aland2010.shape
 
-acs2013 = pop2013.merge(hh2013, on=['geoid', 'year'], how='left').merge(median_inc2013, on=['geoid', 'year'], how='left').merge(
-	pop_nhwhite2013, on=['geoid', 'year'], how="left").merge(aland2013, on=['geoid', 'year'],  how="left")
-acs2013['pop_den'] = acs2013["population"] / acs2013["aland"]
-acs2013['hh_den'] = acs2013["households"] / acs2013["aland"]
+acs2013 = pop2013.merge(hh2013, on=['bg2010', 'year'], how='left').merge(median_inc2013, on=['bg2010', 'year'], how='left').merge(
+	pop_nhwhite2013, on=['bg2010', 'year'], how="left").merge(aland2010, on=['bg2010'],  how="left")
+acs2013['pop_den_acre'] = acs2013["population"] / acs2013["area_acres"]
+acs2013['hh_den_acre'] = acs2013["households"] / acs2013["area_acres"]
 acs2013['pct_minority'] = 1 - (acs2013["pop_nhwhite"] / acs2013["population"])
-acs2013 = acs2013[["geoid", "aland", "hh_den", "pop_den", "median_income_2022dollars", "pct_minority", "year"]]
-acs2013.head()
-acs2013.shape
+acs2013 = acs2013[["bg2010", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2013.head())
+print(acs2013.shape)
 acs2013.to_csv("./outputs/acs2013.csv", index = False)
 
 # 2014
@@ -1686,16 +2134,16 @@ pop2014.shape
 hh2014.shape
 median_inc2014.shape
 pop_nhwhite2014.shape
-aland2014.shape
+aland2010.shape
 
-acs2014 = pop2014.merge(hh2014, on=['geoid', 'year'], how='left').merge(median_inc2014, on=['geoid', 'year'], how='left').merge(
-	pop_nhwhite2014, on=['geoid', 'year'], how="left").merge(aland2014, on=['geoid', 'year'],  how="left")
-acs2014['pop_den'] = acs2014["population"] / acs2014["aland"]
-acs2014['hh_den'] = acs2014["households"] / acs2014["aland"]
+acs2014 = pop2014.merge(hh2014, on=['bg2010', 'year'], how='left').merge(median_inc2014, on=['bg2010', 'year'], how='left').merge(
+	pop_nhwhite2014, on=['bg2010', 'year'], how="left").merge(aland2010, on=['bg2010'],  how="left")
+acs2014['pop_den_acre'] = acs2014["population"] / acs2014["area_acres"]
+acs2014['hh_den_acre'] = acs2014["households"] / acs2014["area_acres"]
 acs2014['pct_minority'] = 1 - (acs2014["pop_nhwhite"] / acs2014["population"])
-acs2014 = acs2014[["geoid", "aland", "hh_den", "pop_den", "median_income_2022dollars", "pct_minority", "year"]]
-acs2014.head()
-acs2014.shape
+acs2014 = acs2014[["bg2010", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2014.head())
+print(acs2014.shape)
 acs2014.to_csv("./outputs/acs2014.csv", index = False)
 
 # 2015
@@ -1703,16 +2151,16 @@ pop2015.shape
 hh2015.shape
 median_inc2015.shape
 pop_nhwhite2015.shape
-aland2015.shape
+aland2010.shape
 
-acs2015 = pop2015.merge(hh2015, on=['geoid', 'year'], how='left').merge(median_inc2015, on=['geoid', 'year'], how='left').merge(
-	pop_nhwhite2015, on=['geoid', 'year'], how="left").merge(aland2015, on=['geoid', 'year'],  how="left")
-acs2015['pop_den'] = acs2015["population"] / acs2015["aland"]
-acs2015['hh_den'] = acs2015["households"] / acs2015["aland"]
+acs2015 = pop2015.merge(hh2015, on=['bg2010', 'year'], how='left').merge(median_inc2015, on=['bg2010', 'year'], how='left').merge(
+	pop_nhwhite2015, on=['bg2010', 'year'], how="left").merge(aland2010, on=['bg2010'],  how="left")
+acs2015['pop_den_acre'] = acs2015["population"] / acs2015["area_acres"]
+acs2015['hh_den_acre'] = acs2015["households"] / acs2015["area_acres"]
 acs2015['pct_minority'] = 1 - (acs2015["pop_nhwhite"] / acs2015["population"])
-acs2015 = acs2015[["geoid", "aland", "hh_den", "pop_den", "median_income_2022dollars", "pct_minority", "year"]]
-acs2015.head()
-acs2015.shape
+acs2015 = acs2015[["bg2010", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2015.head())
+print(acs2015.shape)
 acs2015.to_csv("./outputs/acs2015.csv", index = False)
 
 # 2016
@@ -1720,16 +2168,16 @@ pop2016.shape
 hh2016.shape
 median_inc2016.shape
 pop_nhwhite2016.shape
-aland2016.shape
+aland2010.shape
 
-acs2016 = pop2016.merge(hh2016, on=['geoid', 'year'], how='left').merge(median_inc2016, on=['geoid', 'year'], how='left').merge(
-	pop_nhwhite2016, on=['geoid', 'year'], how="left").merge(aland2016, on=['geoid', 'year'],  how="left")
-acs2016['pop_den'] = acs2016["population"] / acs2016["aland"]
-acs2016['hh_den'] = acs2016["households"] / acs2016["aland"]
+acs2016 = pop2016.merge(hh2016, on=['bg2010', 'year'], how='left').merge(median_inc2016, on=['bg2010', 'year'], how='left').merge(
+	pop_nhwhite2016, on=['bg2010', 'year'], how="left").merge(aland2010, on=['bg2010'],  how="left")
+acs2016['pop_den_acre'] = acs2016["population"] / acs2016["area_acres"]
+acs2016['hh_den_acre'] = acs2016["households"] / acs2016["area_acres"]
 acs2016['pct_minority'] = 1 - (acs2016["pop_nhwhite"] / acs2016["population"])
-acs2016 = acs2016[["geoid", "aland", "hh_den", "pop_den", "median_income_2022dollars", "pct_minority", "year"]]
-acs2016.head()
-acs2016.shape
+acs2016 = acs2016[["bg2010", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2016.head())
+print(acs2016.shape)
 acs2016.to_csv("./outputs/acs2016.csv", index = False)
 
 # 2017
@@ -1737,16 +2185,16 @@ pop2017.shape
 hh2017.shape
 median_inc2017.shape
 pop_nhwhite2017.shape
-aland2017.shape
+aland2010.shape
 
-acs2017 = pop2017.merge(hh2017, on=['geoid', 'year'], how='left').merge(median_inc2017, on=['geoid', 'year'], how='left').merge(
-	pop_nhwhite2017, on=['geoid', 'year'], how="left").merge(aland2017, on=['geoid', 'year'],  how="left")
-acs2017['pop_den'] = acs2017["population"] / acs2017["aland"]
-acs2017['hh_den'] = acs2017["households"] / acs2017["aland"]
+acs2017 = pop2017.merge(hh2017, on=['bg2010', 'year'], how='left').merge(median_inc2017, on=['bg2010', 'year'], how='left').merge(
+	pop_nhwhite2017, on=['bg2010', 'year'], how="left").merge(aland2010, on=['bg2010'],  how="left")
+acs2017['pop_den_acre'] = acs2017["population"] / acs2017["area_acres"]
+acs2017['hh_den_acre'] = acs2017["households"] / acs2017["area_acres"]
 acs2017['pct_minority'] = 1 - (acs2017["pop_nhwhite"] / acs2017["population"])
-acs2017 = acs2017[["geoid", "aland", "hh_den", "pop_den", "median_income_2022dollars", "pct_minority", "year"]]
-acs2017.head()
-acs2017.shape
+acs2017 = acs2017[["bg2010", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2017.head())
+print(acs2017.shape)
 acs2017.to_csv("./outputs/acs2017.csv", index = False)
 
 # 2018
@@ -1754,16 +2202,16 @@ pop2018.shape
 hh2018.shape
 median_inc2018.shape
 pop_nhwhite2018.shape
-aland2018.shape
+aland2010.shape
 
-acs2018 = pop2018.merge(hh2018, on=['geoid', 'year'], how='left').merge(median_inc2018, on=['geoid', 'year'], how='left').merge(
-	pop_nhwhite2018, on=['geoid', 'year'], how="left").merge(aland2018, on=['geoid', 'year'],  how="left")
-acs2018['pop_den'] = acs2018["population"] / acs2018["aland"]
-acs2018['hh_den'] = acs2018["households"] / acs2018["aland"]
+acs2018 = pop2018.merge(hh2018, on=['bg2010', 'year'], how='left').merge(median_inc2018, on=['bg2010', 'year'], how='left').merge(
+	pop_nhwhite2018, on=['bg2010', 'year'], how="left").merge(aland2010, on=['bg2010'],  how="left")
+acs2018['pop_den_acre'] = acs2018["population"] / acs2018["area_acres"]
+acs2018['hh_den_acre'] = acs2018["households"] / acs2018["area_acres"]
 acs2018['pct_minority'] = 1 - (acs2018["pop_nhwhite"] / acs2018["population"])
-acs2018 = acs2018[["geoid", "aland", "hh_den", "pop_den", "median_income_2022dollars", "pct_minority", "year"]]
-acs2018.head()
-acs2018.shape
+acs2018 = acs2018[["bg2010", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2018.head())
+print(acs2018.shape)
 acs2018.to_csv("./outputs/acs2018.csv", index = False)
 
 # 2019
@@ -1771,16 +2219,16 @@ pop2019.shape
 hh2019.shape
 median_inc2019.shape
 pop_nhwhite2019.shape
-aland2019.shape
+aland2010.shape
 
-acs2019 = pop2019.merge(hh2019, on=['geoid', 'year'], how='left').merge(median_inc2019, on=['geoid', 'year'], how='left').merge(
-	pop_nhwhite2019, on=['geoid', 'year'], how="left").merge(aland2019, on=['geoid', 'year'],  how="left")
-acs2019['pop_den'] = acs2019["population"] / acs2019["aland"]
-acs2019['hh_den'] = acs2019["households"] / acs2019["aland"]
+acs2019 = pop2019.merge(hh2019, on=['bg2010', 'year'], how='left').merge(median_inc2019, on=['bg2010', 'year'], how='left').merge(
+	pop_nhwhite2019, on=['bg2010', 'year'], how="left").merge(aland2010, on=['bg2010'],  how="left")
+acs2019['pop_den_acre'] = acs2019["population"] / acs2019["area_acres"]
+acs2019['hh_den_acre'] = acs2019["households"] / acs2019["area_acres"]
 acs2019['pct_minority'] = 1 - (acs2019["pop_nhwhite"] / acs2019["population"])
-acs2019 = acs2019[["geoid", "aland", "hh_den", "pop_den", "median_income_2022dollars", "pct_minority", "year"]]
-acs2019.head()
-acs2019.shape
+acs2019 = acs2019[["bg2010", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2019.head())
+print(acs2019.shape)
 acs2019.to_csv("./outputs/acs2019.csv", index = False)
 
 # 2020
@@ -1790,14 +2238,14 @@ median_inc2020.shape
 pop_nhwhite2020.shape
 aland2020.shape
 
-acs2020 = pop2020.merge(hh2020, on=['geoid', 'year'], how='left').merge(median_inc2020, on=['geoid', 'year'], how='left').merge(
-	pop_nhwhite2020, on=['geoid', 'year'], how="left").merge(aland2020, on=['geoid', 'year'],  how="left")
-acs2020['pop_den'] = acs2020["population"] / acs2020["aland"]
-acs2020['hh_den'] = acs2020["households"] / acs2020["aland"]
+acs2020 = pop2020.merge(hh2020, on=['bg2020', 'year'], how='left').merge(median_inc2020, on=['bg2020', 'year'], how='left').merge(
+	pop_nhwhite2020, on=['bg2020', 'year'], how="left").merge(aland2020, on=['bg2020'],  how="left")
+acs2020['pop_den_acre'] = acs2020["population"] / acs2020["area_acres"]
+acs2020['hh_den_acre'] = acs2020["households"] / acs2020["area_acres"]
 acs2020['pct_minority'] = 1 - (acs2020["pop_nhwhite"] / acs2020["population"])
-acs2020 = acs2020[["geoid", "aland", "hh_den", "pop_den", "median_income_2022dollars", "pct_minority", "year"]]
-acs2020.head()
-acs2020.shape
+acs2020 = acs2020[["bg2020", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2020.head())
+print(acs2020.shape)
 acs2020.to_csv("./outputs/acs2020.csv", index = False)
 
 # 2021
@@ -1805,16 +2253,16 @@ pop2021.shape
 hh2021.shape
 median_inc2021.shape
 pop_nhwhite2021.shape
-aland2021.shape
+aland2020.shape
 
-acs2021 = pop2021.merge(hh2021, on=['geoid', 'year'], how='left').merge(median_inc2021, on=['geoid', 'year'], how='left').merge(
-	pop_nhwhite2021, on=['geoid', 'year'], how="left").merge(aland2021, on=['geoid', 'year'],  how="left")
-acs2021['pop_den'] = acs2021["population"] / acs2021["aland"]
-acs2021['hh_den'] = acs2021["households"] / acs2021["aland"]
+acs2021 = pop2021.merge(hh2021, on=['bg2020', 'year'], how='left').merge(median_inc2021, on=['bg2020', 'year'], how='left').merge(
+	pop_nhwhite2021, on=['bg2020', 'year'], how="left").merge(aland2020, on=['bg2020'],  how="left")
+acs2021['pop_den_acre'] = acs2021["population"] / acs2021["area_acres"]
+acs2021['hh_den_acre'] = acs2021["households"] / acs2021["area_acres"]
 acs2021['pct_minority'] = 1 - (acs2021["pop_nhwhite"] / acs2021["population"])
-acs2021 = acs2021[["geoid", "aland", "hh_den", "pop_den", "median_income_2022dollars", "pct_minority", "year"]]
-acs2021.head()
-acs2021.shape
+acs2021 = acs2021[["bg2020", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2021.head())
+print(acs2021.shape)
 acs2021.to_csv("./outputs/acs2021.csv", index = False)
 
 # 2022
@@ -1822,16 +2270,16 @@ pop2022.shape
 hh2022.shape
 median_inc2022.shape
 pop_nhwhite2022.shape
-aland2022.shape
+aland2020.shape
 
-acs2022 = pop2022.merge(hh2022, on=['geoid', 'year'], how='left').merge(median_inc2022, on=['geoid', 'year'], how='left').merge(
-	pop_nhwhite2022, on=['geoid', 'year'], how="left").merge(aland2022, on=['geoid', 'year'],  how="left")
-acs2022['pop_den'] = acs2022["population"] / acs2022["aland"]
-acs2022['hh_den'] = acs2022["households"] / acs2022["aland"]
+acs2022 = pop2022.merge(hh2022, on=['bg2020', 'year'], how='left').merge(median_inc2022, on=['bg2020', 'year'], how='left').merge(
+	pop_nhwhite2022, on=['bg2020', 'year'], how="left").merge(aland2020, on=['bg2020'],  how="left")
+acs2022['pop_den_acre'] = acs2022["population"] / acs2022["area_acres"]
+acs2022['hh_den_acre'] = acs2022["households"] / acs2022["area_acres"]
 acs2022['pct_minority'] = 1 - (acs2022["pop_nhwhite"] / acs2022["population"])
-acs2022 = acs2022[["geoid", "aland", "hh_den", "pop_den", "median_income_2022dollars", "pct_minority", "year"]]
-acs2022.head()
-acs2022.shape
+acs2022 = acs2022[["bg2020", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2022.head())
+print(acs2022.shape)
 acs2022.to_csv("./outputs/acs2022.csv", index = False)
 
 print("All done, check outputs for files...")

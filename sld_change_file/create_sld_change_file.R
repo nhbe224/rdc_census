@@ -46,7 +46,7 @@ sld_v3 <- sld_v3_load %>%
 sld_v3 <- st_drop_geometry(sld_v3)
 
 ## Rename columns 
-sld_colnames <- c("geoid", "population", "employment", "res_den", "pop_den", "emp_den",
+sld_colnames <- c("bg2010", "population", "employment", "res_den", "pop_den", "emp_den",
                   "jobs_per_hh", "emp8_ent", "emp_hh_ent",
                   "intersection_den", "auto_only_den",
                   "transit_freq", "transit_den", "transit_dist", 
@@ -121,9 +121,108 @@ plot(san_diego_2018[, "transit_jobs45"],
      breaks = "jenks",
      main = "San Diego County Jobs within 45 minutes of Transit (2018)")
 
+
+# Examine DMV After Silver Line -------------------------------------------
+nova_fips <- c("51059", "51610")
+
+nova_2010 <- sld_v2 %>%
+  filter(substr(bg2010, 1, 5) %in% nova_fips & year == 2010)
+
+nova_2018 <- sld_v3 %>%
+  filter(substr(bg2010, 1, 5) %in% nova_fips & year == 2018)
+
+
+nova_bgs <- block_groups("Virginia", c("Fairfax County", "Falls Church"), year = 2010)
+
+nova_2010 <- nova_bgs %>% 
+  left_join(nova_2010, by = c("GEOID10" = "bg2010"))
+
+nova_2018 <- nova_bgs %>% 
+  left_join(nova_2018, by = c("GEOID10" = "bg2010")) 
+
+## Transit Density
+nova_2010_transit_den <- nova_2010 %>%
+  select(GEOID10, year, transit_den) %>%
+  filter(!is.na(transit_den) & transit_den >= 0) %>%
+  mutate(transit_den_category = case_when(transit_den < 60 ~ "< 60",
+                                          transit_den >= 60 & transit_den < 180 ~ "60 to < 180",
+                                          transit_den >= 180 & transit_den < 500 ~ "180 to < 500",
+                                          transit_den >= 500 & transit_den < 2000 ~ "500 to < 2000",
+                                          transit_den >= 2000 & transit_den < 8000 ~ "2000 to < 8000",
+                                          transit_den >= 8000 ~ ">= 8000"))
+
+nova_2010_transit_den$transit_den_category <- factor(nova_2010_transit_den$transit_den_category, 
+                                                     levels = c("< 60", "60 to < 180", "180 to < 500", "500 to < 2000",
+                                                                "2000 to < 8000", ">= 8000"))
+
+nova_2018_transit_den <- nova_2018 %>%
+  select(GEOID10, year, transit_den) %>%
+  filter(!is.na(transit_den) & transit_den >= 0) %>%
+  mutate(transit_den_category = case_when(transit_den < 60 ~ "< 60",
+                                          transit_den >= 60 & transit_den < 180 ~ "60 to < 180",
+                                          transit_den >= 180 & transit_den < 500 ~ "180 to < 500",
+                                          transit_den >= 500 & transit_den < 2000 ~ "500 to < 2000",
+                                          transit_den >= 2000 & transit_den < 8000 ~ "2000 to < 8000",
+                                          transit_den >= 8000 ~ ">= 8000"))
+
+nova_2018_transit_den$transit_den_category <- factor(nova_2018_transit_den$transit_den_category, 
+                                                     levels = c("< 60", "60 to < 180", "180 to < 500", "500 to < 2000",
+                                                                "2000 to < 8000", ">= 8000"))
+
+
+## Transit Distance
+nova_2010_transit_dist <- nova_2010 %>%
+  select(GEOID10, year, transit_dist) %>%
+  filter(!is.na(transit_dist) & transit_dist >= 0) %>%
+  mutate(transit_dist_miles = transit_dist / 1609) %>%
+  mutate(transit_dist_category = case_when(transit_dist_miles < 0.25 ~ "< 0.25",
+                                          transit_dist_miles >= 0.25 & transit_dist_miles < 0.5 ~ "0.25 to < 0.5",
+                                          transit_dist_miles >= 0.5 & transit_dist_miles < 0.75 ~ "0.5 to < 0.75",
+                                          transit_dist_miles >= 0.75 & transit_dist_miles < 1 ~ "0.75 to < 1",
+                                          transit_dist_miles > 1 ~ "> 1")) 
+
+nova_2010_transit_dist$transit_dist_miles<- factor(nova_2010_transit_dist$transit_dist_category, 
+                                                     levels = c("< 0.25", "0.25 to < 0.5", "0.5 to < 0.75", "0.75 to < 1",
+                                                                "> 1"))
+nova_2018_transit_dist <- nova_2018 %>%
+  select(GEOID10, year, transit_dist) %>%
+  filter(!is.na(transit_dist) & transit_dist >= 0) %>%
+  mutate(transit_dist_miles = transit_dist / 1609) %>%
+  mutate(transit_dist_category = case_when(transit_dist_miles < 0.25 ~ "< 0.25",
+                                           transit_dist_miles >= 0.25 & transit_dist_miles < 0.5 ~ "0.25 to < 0.5",
+                                           transit_dist_miles >= 0.5 & transit_dist_miles < 0.75 ~ "0.5 to < 0.75",
+                                           transit_dist_miles >= 0.75 & transit_dist_miles < 1 ~ "0.75 to < 1",
+                                           transit_dist_miles > 1 ~ "> 1")) 
+
+nova_2018_transit_dist$transit_dist_miles<- factor(nova_2018_transit_dist$transit_dist_category, 
+                                                   levels = c("< 0.25", "0.25 to < 0.5", "0.5 to < 0.75", "0.75 to < 1",
+                                                              "> 1"))
+
+
 ### Map of Differences between 2018 and 2010.
-## DC silver line NOVA
-## Look at variables highlighted in yellow in Public Data Inventory
+ggplot() + 
+  geom_sf(data = nova_2010_transit_den, mapping = aes(fill = transit_den_category)) +
+  geom_sf(data = nova_2010_transit_den, fill = NA) +
+  labs(title = "Northern Virginia PM Transit Service Density (2010)")
+
+ggplot() + 
+  geom_sf(data = nova_2018_transit_den, mapping = aes(fill = transit_den_category)) +
+  geom_sf(data = nova_2018_transit_den, fill = NA) +
+  labs(title = "Northern Virginia PM Transit Service Density (2018)")
+
+ggplot() + 
+  geom_sf(data = nova_2010_transit_dist, mapping = aes(fill = transit_dist_miles)) +
+  geom_sf(data = nova_2010_transit_dist, fill = NA) +
+  labs(title = "Northern Virginia PM Transit Distance (2010)") + 
+  scale_fill_manual(values = c("firebrick", "royalblue", "seagreen3", "purple"))
+
+ggplot() + 
+  geom_sf(data = nova_2018_transit_dist, mapping = aes(fill = transit_dist_miles)) +
+  geom_sf(data = nova_2018_transit_dist, fill = NA) +
+  labs(title = "Northern Virginia PM Transit Distance (2018)") + 
+  scale_fill_manual(values = c("firebrick", "royalblue", "seagreen3", "purple"))
+  
+# Doesn't make sense...
 
 # Write Out to CSV --------------------------------------------------------
 write.csv(sld_v2, "./outputs/sld_change_file2010.csv", row.names = F)
