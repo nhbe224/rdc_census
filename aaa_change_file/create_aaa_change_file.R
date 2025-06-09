@@ -3,18 +3,23 @@
 # Set Working Directory ---------------------------------------------------
 setwd("D:/neeco/rdc_census/aaa_change_file/")
 
+### AAA: aggregate blocks using average
+## Document via readme
+## Make a data dictionary
+## Make a powerpoint presentation, include list of unanswered questions
+## Some maps?? One set for absolute, one set for change. 
+#### US, Lexington (or other places we have local knowledge about)
+
 # Install Packages --------------------------------------------------------
 library(tidyverse)
 library(data.table)
 library(sf)
-library(foreach)
-library(doParallel)
 
-completed_years <- c()
 # Transit ----------------------------------------------------------------
 ## 2014-2017 -------------------------------------------------------------
 transit_years_csv <- c(2014, 2015, 2016, 2017)
 transit_dfs_csv <- list()
+
 for(i in 1:length(transit_years_csv)){
   transit_dfs_csv[[i]] <- do.call(rbind, lapply(paste0(getwd(), "/inputs/transit", 
                                                         transit_years_csv[i], "/", 
@@ -23,11 +28,22 @@ for(i in 1:length(transit_years_csv)){
   transit_dfs_csv[[i]]$year <- transit_years_csv[i]
   if(transit_years_csv[i] == 2014){
     transit_dfs_csv[[i]] <- transit_dfs_csv[[i]] %>%
-      rename(jobs = tot_jobs)
-  }
+      rename(jobs = tot_jobs)}
+  transit_dfs_csv[[i]]$geoid <- as.character(transit_dfs_csv[[i]]$geoid)
+  # Make sure character length is right
+  transit_dfs_csv[[i]]$bg2010 <- ifelse(nchar(transit_dfs_csv[[i]]$geoid) == 14, paste0("0", transit_dfs_csv[[i]]$geoid), transit_dfs_csv[[i]]$geoid)
+  # Make into block groups
+  transit_dfs_csv[[i]]$bg2010 <- substr(as.character(transit_dfs_csv[[i]]$bg2010), 1, 12)
+  transit_dfs_csv[[i]] <- transit_dfs_csv[[i]] %>%
+    select(bg2010, threshold, jobs, year)
+  transit_dfs_csv[[i]] <- transit_dfs_csv[[i]] %>%
+    select(bg2010, threshold, jobs, year) %>%
+    group_by(bg2010, threshold, year) %>%
+    summarize(jobs = mean(jobs))
   write.csv(transit_dfs_csv[[i]], paste0("./outputs/transit",  transit_years_csv[i], ".csv"), row.names = F)
 }
-rm(transit_dfs_csv)
+
+#rm(transit_dfs_csv)
 
 ## Unzip These Years
 transit_years_unzip <- c(2018, 2019, 2021, 2022)
@@ -37,6 +53,24 @@ for(i in 1:length(transit_years_unzip)){
   for(j in files) {
     print(paste0("./inputs/transit", transit_years_unzip[i] ,"/", j))
     unzip(paste0("./inputs/transit", transit_years_unzip[i] ,"/", j), exdir=outDir)
+  }
+}
+
+## Account for zipfiles with folders in them (instead of files)
+transit_years_unzip <- c(2018, 2019, 2021, 2022)
+for(i in 1:length(transit_years_unzip)){
+  folders <- list.dirs(path = paste0("./inputs/transit", transit_years_unzip[i]), recursive = FALSE)
+  folders_use <- folders[!grepl("__MACOSX", folders)]
+  print(folders_use)
+  for(j in folders_use){
+    # List files in the subdirectory
+    files <- list.files(folders_use, full.names = TRUE)
+    # Construct destination paths
+    dest_files <- file.path(paste0("./inputs/transit", transit_years_unzip[i]), basename(files))
+    # Move files up one level
+    file.rename(files, dest_files)
+    # Optionally, remove empty subdirectory
+    unlink(folders_use, recursive = TRUE)
   }
 }
 
@@ -55,6 +89,7 @@ st_read_select <- function(file){
   return(state_df)
 }
 
+
 transit_dfs_gpkg <- list()
 for(i in 1:length(transit_years_gpkg)){
   file_paths <- paste0(getwd(), "/inputs/transit", 
@@ -65,44 +100,44 @@ for(i in 1:length(transit_years_gpkg)){
   transit_dfs_gpkg[[i]]$threshold <- 30
   transit_dfs_gpkg[[i]] <- transit_dfs_gpkg[[i]] %>%
     select(blockid, w_c000_16, year, threshold) %>%
-    rename(geoid = blockid, jobs = w_c000_16) %>%
-    select(geoid, threshold, jobs, year)
+    rename(block2010 = blockid, jobs = w_c000_16) %>%
+    select(block2010, threshold, jobs, year) %>%
+    mutate(bg2010 = substr(as.character(block2010), 1, 12)) %>%
+    group_by(bg2010, threshold, year) %>%
+    summarize(jobs = mean(jobs, na.rm = T))
+}
+
+for(i in 1:length(transit_years_gpkg)){
   write.csv(transit_dfs_gpkg[[i]], paste0("./outputs/transit",  transit_years_gpkg[i], ".csv"), row.names = F)
 }
 
 ## 2021 ----------------------------------------------------------------------
-transit_years_2021 <- c(2021)
-transit_dfs_2021 <- list()
-for(i in 1:length(transit_years_2021)){
-  keep_files <- list.files(path=paste0("./inputs/transit", transit_years_2021[i]), pattern=paste0('*block_', transit_years_2021[i], '.csv'))
-  print(keep_files)
-  transit_dfs_2021[[i]] <- do.call(rbind,lapply(paste0(getwd(), "/inputs/transit", transit_years_2021[i], '/', keep_files), fread))
-  transit_dfs_2021[[i]]$year <- transit_years_2021[i]
-  transit_dfs_2021[[i]] <- transit_dfs_2021[[i]] %>%
-    select(geoid, threshold, weighted_average, year) %>%
-    filter(threshold == 1800) %>%
-    rename(jobs = weighted_average) %>%
-    mutate(threshold = threshold / 60)
-  write.csv(transit_dfs_2021[[i]], paste0("./outputs/transit",  transit_years_2021[i], ".csv"), row.names = F)
-}
+keep_files <- list.files(path=paste0("./inputs/transit2021"), pattern=paste0('*block_group_2021.csv'))
+print(keep_files)
+transit_dfs_2021 <- do.call(rbind,lapply(paste0(getwd(), "/inputs/transit2021", '/', keep_files), fread))
+transit_dfs_2021$year <- 2021
+transit_dfs_2021 <- transit_dfs_2021 %>%
+  select(geoid, threshold, weighted_average, year) %>%
+  filter(threshold == 1800) %>%
+  rename(jobs = weighted_average, bg2010 = geoid) %>%
+  mutate(threshold = threshold / 60)
+write.csv(transit_dfs_2021, paste0("./outputs/transit2021.csv"), row.names = F)
+
 
 ## 2022 ----------------------------------------------------------------------
-transit_years_2022 <- c(2022)
 transit_dfs_2022 <- list()
-for(i in 1:length(transit_years_2022)){
-  keep_files <- list.files(path=paste0("./inputs/transit", transit_years_2022[i]), pattern=paste0('*block_', transit_years_2022[i], '.csv'))
-  print(keep_files)
-  transit_dfs_2022[[i]] <- do.call(rbind,lapply(paste0(getwd(), "/inputs/transit", transit_years_2022[i], '/', keep_files), fread))
-  transit_dfs_2022[[i]] <- transit_dfs_2022[[i]] %>%
-    select(`Census ID`, Threshold, total_jobs, Year) %>%
-    filter(Threshold == 30) %>%
-    rename(jobs = total_jobs,
-           geoid = `Census ID`,
-           year = Year,
-           threshold = Threshold) %>%
-    select(geoid, threshold, jobs, year)
-  write.csv(transit_dfs_2022[[i]], paste0("./outputs/transit",  transit_years_2022[i], ".csv"), row.names = F)
-}
+keep_files <- list.files(path=paste0("./inputs/transit2022"), pattern=paste0('*block_group_2022.csv'))
+print(keep_files)
+transit_dfs_2022 <- do.call(rbind,lapply(paste0(getwd(), "/inputs/transit2022", '/', keep_files), fread))
+transit_dfs_2022 <- transit_dfs_2022 %>%
+  select(`Census ID`, Threshold, Weighted_average_total_jobs, Year) %>%
+  filter(Threshold == 30) %>%
+  rename(jobs = Weighted_average_total_jobs,
+         bg2020 = `Census ID`,
+         year = Year,
+         threshold = Threshold) %>%
+  select(bg2020, threshold, jobs, year)
+write.csv(transit_dfs_2022, paste0("./outputs/transit2022.csv"), row.names = F)
 
 
 # Walk --------------------------------------------------------------------
@@ -112,8 +147,13 @@ walk2014 <- do.call(rbind, lapply(walk2014_files, fread))
 walk2014$threshold <- 30
 walk2014$year <- 2014
 walk2014 <- walk2014 %>%
-  rename(geoid = geoid10, jobs = jobs_tot) %>%
-  select(geoid, threshold, jobs, year)
+  rename(block2010 = geoid10, jobs = jobs_tot) %>%
+  select(block2010, threshold, jobs, year) %>%
+  mutate(block2010 = as.character(block2010)) %>%
+  mutate(block2010 = ifelse(nchar(block2010) == 14, paste0("0", block2010), block2010),
+         bg2010 = substr(as.character(block2010), 1, 12)) %>%
+  group_by(bg2010, threshold, year) %>%
+  summarize(jobs = mean(jobs, na.rm = TRUE))
 write.csv(walk2014, "./outputs/walk2014.csv", row.names = F)
 
 ## 2022 -------------------------------------------------------------------
@@ -124,12 +164,14 @@ for(j in walk_unzip) {
   unzip(paste0("./inputs/walk2022/", j), exdir=outDir)
 }
 
-walk2022_files <- paste0(getwd(), "/inputs/walk2022/", list.files(path = "./inputs/walk2022", pattern = "*block_2022.csv"))
+walk2022_files <- paste0(getwd(), "/inputs/walk2022/", list.files(path = "./inputs/walk2022", pattern = "*block_group_2022.csv"))
 walk2022 <- do.call(rbind, lapply(walk2022_files, fread))
 walk2022 <- walk2022 %>%
-  rename(geoid = `Census ID`, jobs = total_jobs, year = Year, threshold = Threshold) %>%
-  select(geoid, threshold, jobs, year) %>%
-  filter(threshold == 30)
+  rename(bg2020 = `Census ID`, jobs = Weighted_average_total_jobs, year = Year, threshold = Threshold) %>%
+  select(bg2020, threshold, jobs, year) %>%
+  filter(threshold == 30) %>%
+  mutate(bg2020 = as.character(bg2020),
+         bg2020 = ifelse(nchar(bg2020) == 11, paste0("0", bg2020), bg2020))
 write.csv(walk2022, "./outputs/walk2022.csv", row.names = F)
 
 # Bike --------------------------------------------------------------------
@@ -160,10 +202,12 @@ bike2019 <- do.call(rbind, lapply(file_paths, st_read_select_bike))
 bike2019$year <- 2019
 bike2019$threshold <- 30
 bike2019 <- bike2019 %>%
-  rename(geoid = blockid,
-         jobs = w_c000_16) %>%
-  select(geoid, threshold, jobs, year)
-bike2019$geoid <- as.numeric(bike2019$geoid)
+  rename(jobs = w_c000_16) %>%
+  select(blockid, threshold, jobs, year) %>%
+  mutate(bg2010 = substr(blockid, 1, 12)) %>%
+  group_by(bg2010, threshold, year) %>%
+  summarize(jobs = mean(jobs, na.rm = T))
+  
 write.csv(bike2019, "./outputs/bike2019.csv", row.names = F)
 
 ## 2021 -------------------------------------------------------------------
@@ -174,15 +218,30 @@ for(j in bike_unzip) {
   unzip(paste0("./inputs/bike2021/", j), exdir=outDir)
 }
 
+folders <- list.dirs(path = "./inputs/bike2021", recursive = FALSE)
+folders_use <- folders[!grepl("__MACOSX", folders)]
+print(folders_use)
+# List files in the subdirectory
+files <- list.files(folders_use, full.names = TRUE)
+# Construct destination paths
+dest_files <- file.path("./inputs/bike2021", basename(files))
+# Move files up one level
+file.rename(files, dest_files)
+# Optionally, remove empty subdirectory
+unlink(folders_use, recursive = TRUE)
 
-keep_files <- list.files(path="./inputs/bike2021", pattern = '*block_2021.csv')
+keep_files <- list.files(path="./inputs/bike2021", pattern = '*block_group_2021.csv')
 print(keep_files) 
 bike2021 <- do.call(rbind, lapply(paste0(getwd(), "/inputs/bike2021/", keep_files), fread))
 bike2021 <- bike2021 %>%
   select(geoid, threshold, weighted_average, year) %>%
   filter(threshold == 1800) %>%
-  rename(jobs = weighted_average) %>%
-  mutate(threshold = threshold / 60)
+  rename(jobs = weighted_average,
+         bg2010 = geoid) %>%
+  mutate(threshold = threshold / 60) %>%
+  mutate(bg2010 = as.character(bg2010),
+         bg2010 = ifelse(nchar(bg2010) == 11, paste0("0", bg2010), bg2010))
+
 write.csv(bike2021, "./outputs/bike2021.csv", row.names = F)
 
 
@@ -194,15 +253,17 @@ for(j in bike_unzip) {
   unzip(paste0("./inputs/bike2022/", j), exdir=outDir)
 }
 
-
-keep_files <- list.files(path="./inputs/bike2022", pattern = '*block_2022.csv')
+keep_files <- list.files(path="./inputs/bike2022", pattern = '*block_group_2022.csv')
 print(keep_files) 
 bike2022 <- do.call(rbind, lapply(paste0(getwd(), "/inputs/bike2022/", keep_files), fread))
 bike2022 <- bike2022 %>%
-  select(`Census ID`, Threshold, total_jobs, Year) %>%
-  rename(geoid = `Census ID`, threshold = Threshold, 
-         jobs = total_jobs, year = Year) %>%
-  filter(threshold == 30)
+  select(`Census ID`, Threshold, Weighted_average_total_jobs, Year) %>%
+  rename(bg2020 = `Census ID`, threshold = Threshold, 
+         jobs = Weighted_average_total_jobs, year = Year) %>%
+  filter(threshold == 30) %>%
+  mutate(bg2020 = as.character(bg2020),
+         bg2020 = ifelse(nchar(bg2020) == 11, paste0("0", bg2020), bg2020))
+
 write.csv(bike2022, "./outputs/bike2022.csv", row.names = F)
 
 # Auto --------------------------------------------------------------------
@@ -227,9 +288,11 @@ auto2018 <- do.call(rbind, lapply(file_paths, st_read_select_auto))
 auto2018$year <- 2018
 auto2018$threshold <- 30
 auto2018 <- auto2018 %>%
-  rename(geoid = blockid, jobs = w_c000_16) %>%
-  select(geoid, threshold, jobs, year) %>%
-  distinct()
+  rename(jobs = w_c000_16) %>%
+  select(blockid, threshold, jobs, year) %>%
+  mutate(bg2010 = substr(blockid, 1, 12)) %>%
+  group_by(bg2010, threshold, year) %>%
+  summarize(jobs = mean(jobs, na.rm = T))
 
 write.csv(auto2018, "./outputs/auto2018.csv", row.names = F)
 
@@ -248,17 +311,18 @@ unzipped_folders
 auto2021 <- list()
 for(i in 1:length(unzipped_folders)){
   keep_files <- list.files(path = paste0("./inputs/auto2021/", unzipped_folders[i]),
-                           pattern = "*block_2021.csv")
+                           pattern = "*block_group_2021.csv")
   auto2021[[i]] <- fread(paste0(getwd(), "/inputs/auto2021/", unzipped_folders[i], "/", keep_files))
+  auto2021[[i]]$geoid <- as.character(auto2021[[i]]$geoid)
 }
 
 auto2021 <- bind_rows(auto2021, .id = "column_label")
 auto2021 <- auto2021 %>%
   rename(jobs = weighted_average) %>%
-  mutate(threshold = threshold / 60) %>%
+  mutate(threshold = threshold / 60,
+         bg2010 = ifelse(nchar(geoid) == 11, paste0("0", geoid), geoid)) %>%
   filter(threshold == 30) %>%
-  select(geoid, threshold, jobs, year) %>%
-  distinct()
+  select(bg2010, threshold, jobs, year) 
 
 write.csv(auto2021, "./outputs/auto2021.csv", row.names = F)
 
@@ -270,20 +334,24 @@ for(j in auto_unzip) {
   unzip(paste0("./inputs/auto2022/", j), exdir=outDir)
 }
 
-keep_files <- list.files(path="./inputs/auto2022", pattern = '*block_2022.csv')
+keep_files <- list.files(path="./inputs/auto2022", pattern = '*block_group_2022.csv')
 print(keep_files) 
 auto2022 <- do.call(rbind, lapply(paste0(getwd(), "/inputs/auto2022/", keep_files), fread))
+auto2022$geoid = as.character(auto2022$`Census ID`)
 auto2022 <- auto2022 %>%
-  select(`Census ID`, Threshold, total_jobs, Year) %>%
-  rename(geoid = `Census ID`, threshold = Threshold, 
-         jobs = total_jobs, year = Year) %>%
-  filter(threshold == 30)
+  rename(jobs = Weighted_average_total_jobs,
+         year = Year,
+         threshold = Threshold) %>%
+  mutate(bg2020 = ifelse(nchar(geoid) == 11, paste0("0", geoid), geoid)) %>%
+  filter(threshold == 30) %>%
+  select(bg2020, threshold, jobs, year)
 write.csv(auto2022, "./outputs/auto2022.csv", row.names = F)
 
 # Make Sure Files are Consistent ------------------------------------------
 output_files <- paste0("./outputs/", list.files(path = "./outputs", pattern = "*.csv"))
 output_files
 for(i in output_files){
+  print(i)
   print(head(fread(i)))
 }
 

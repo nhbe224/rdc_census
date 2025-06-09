@@ -94,8 +94,8 @@ emp_load2002['bg2000'] = emp_load2002['bg2000'].str[:-3]
 emp_load2002['bg2000'] = emp_load2002['bg2000'].apply(add_leading_zero)
 ## Group by bg2000 and sum emp_tot to get total employment by block group
 emp2002 = emp_load2002.groupby('bg2000').sum()
-## Replace 0 values with 0.001 for ln purposes
-emp2002 = emp2002.replace(0, 0.001)
+## Add 1 to every value for ln purposes
+emp2002 += 1
 
 ## Calculate employment entropy
 emp2002["E"] = ((emp2002["emp_retail"]/emp2002["emp_tot"])*np.log(emp2002["emp_retail"]/emp2002["emp_tot"])) + \
@@ -122,7 +122,7 @@ emp_hh2002["A"] = ((emp_hh2002["hh"] / emp_hh2002["total_activity"])*np.log(emp_
 ((emp_hh2002["emp_service"] / emp_hh2002["total_activity"])*np.log(emp_hh2002["emp_service"] /emp_hh2002["total_activity"]))  + \
 ((emp_hh2002["emp_entertain"] / emp_hh2002["total_activity"])*np.log(emp_hh2002["emp_entertain"] /emp_hh2002["total_activity"])) 
 
-emp_hh2002["emp_hh_entropy"] = -emp_hh2002["A"]/np.log(5)
+emp_hh2002["emp_hh_entropy"] = -emp_hh2002["A"]/np.log(6)
 
 ## Employment density
 emp_hh2002["emp_den_acre"] = emp_hh2002["emp_tot"] / emp_hh2002["area_acres"]
@@ -175,8 +175,8 @@ emp_load2003['bg2000'] = emp_load2003['bg2000'].str[:-3]
 emp_load2003['bg2000'] = emp_load2003['bg2000'].apply(add_leading_zero)
 ## Group by bg2000 and sum emp_tot to get total employment by block group
 emp2003 = emp_load2003.groupby('bg2000').sum()
-## Replace 0 values with 0.001 for ln purposes
-emp2003 = emp2003.replace(0, 0.001)
+## Add 1 to every value for ln purposes
+emp2003 += 1
 
 ## Calculate employment entropy
 emp2003["E"] = ((emp2003["emp_retail"]/emp2003["emp_tot"])*np.log(emp2003["emp_retail"]/emp2003["emp_tot"])) + \
@@ -203,7 +203,7 @@ emp_hh2003["A"] = ((emp_hh2003["hh"] / emp_hh2003["total_activity"])*np.log(emp_
 ((emp_hh2003["emp_service"] / emp_hh2003["total_activity"])*np.log(emp_hh2003["emp_service"] /emp_hh2003["total_activity"]))  + \
 ((emp_hh2003["emp_entertain"] / emp_hh2003["total_activity"])*np.log(emp_hh2003["emp_entertain"] /emp_hh2003["total_activity"])) 
 
-emp_hh2003["emp_hh_entropy"] = -emp_hh2003["A"]/np.log(5)
+emp_hh2003["emp_hh_entropy"] = -emp_hh2003["A"]/np.log(6)
 
 ## Employment density
 emp_hh2003["emp_den_acre"] = emp_hh2003["emp_tot"] / emp_hh2003["area_acres"]
@@ -256,8 +256,8 @@ emp_load2004['bg2000'] = emp_load2004['bg2000'].str[:-3]
 emp_load2004['bg2000'] = emp_load2004['bg2000'].apply(add_leading_zero)
 ## Group by bg2000 and sum emp_tot to get total employment by block group
 emp2004 = emp_load2004.groupby('bg2000').sum()
-## Replace 0 values with 0.001 for ln purposes
-emp2004 = emp2004.replace(0, 0.001)
+## Add 1 to every value for ln purposes
+emp2004 += 1
 
 ## Calculate employment entropy
 emp2004["E"] = ((emp2004["emp_retail"]/emp2004["emp_tot"])*np.log(emp2004["emp_retail"]/emp2004["emp_tot"])) + \
@@ -284,7 +284,7 @@ emp_hh2004["A"] = ((emp_hh2004["hh"] / emp_hh2004["total_activity"])*np.log(emp_
 ((emp_hh2004["emp_service"] / emp_hh2004["total_activity"])*np.log(emp_hh2004["emp_service"] /emp_hh2004["total_activity"]))  + \
 ((emp_hh2004["emp_entertain"] / emp_hh2004["total_activity"])*np.log(emp_hh2004["emp_entertain"] /emp_hh2004["total_activity"])) 
 
-emp_hh2004["emp_hh_entropy"] = -emp_hh2004["A"]/np.log(5)
+emp_hh2004["emp_hh_entropy"] = -emp_hh2004["A"]/np.log(6)
 
 ## Employment density
 emp_hh2004["emp_den_acre"] = emp_hh2004["emp_tot"] / emp_hh2004["area_acres"]
@@ -337,8 +337,8 @@ emp_load2005['bg2000'] = emp_load2005['bg2000'].str[:-3]
 emp_load2005['bg2000'] = emp_load2005['bg2000'].apply(add_leading_zero)
 ## Group by bg2000 and sum emp_tot to get total employment by block group
 emp2005 = emp_load2005.groupby('bg2000').sum()
-## Replace 0 values with 0.001 for ln purposes
-emp2005 = emp2005.replace(0, 0.001)
+## Add 1 to every value for ln purposes
+emp2005 += 1
 
 ## Calculate employment entropy
 emp2005["E"] = ((emp2005["emp_retail"]/emp2005["emp_tot"])*np.log(emp2005["emp_retail"]/emp2005["emp_tot"])) + \
@@ -365,7 +365,7 @@ emp_hh2005["A"] = ((emp_hh2005["hh"] / emp_hh2005["total_activity"])*np.log(emp_
 ((emp_hh2005["emp_service"] / emp_hh2005["total_activity"])*np.log(emp_hh2005["emp_service"] /emp_hh2005["total_activity"]))  + \
 ((emp_hh2005["emp_entertain"] / emp_hh2005["total_activity"])*np.log(emp_hh2005["emp_entertain"] /emp_hh2005["total_activity"])) 
 
-emp_hh2005["emp_hh_entropy"] = -emp_hh2005["A"]/np.log(5)
+emp_hh2005["emp_hh_entropy"] = -emp_hh2005["A"]/np.log(6)
 
 ## Employment density
 emp_hh2005["emp_den_acre"] = emp_hh2005["emp_tot"] / emp_hh2005["area_acres"]
@@ -418,8 +418,8 @@ emp_load2006['bg2000'] = emp_load2006['bg2000'].str[:-3]
 emp_load2006['bg2000'] = emp_load2006['bg2000'].apply(add_leading_zero)
 ## Group by bg2000 and sum emp_tot to get total employment by block group
 emp2006 = emp_load2006.groupby('bg2000').sum()
-## Replace 0 values with 0.001 for ln purposes
-emp2006 = emp2006.replace(0, 0.001)
+## Add 1 to every value for ln purposes
+emp2006 += 1
 
 ## Calculate employment entropy
 emp2006["E"] = ((emp2006["emp_retail"]/emp2006["emp_tot"])*np.log(emp2006["emp_retail"]/emp2006["emp_tot"])) + \
@@ -446,7 +446,7 @@ emp_hh2006["A"] = ((emp_hh2006["hh"] / emp_hh2006["total_activity"])*np.log(emp_
 ((emp_hh2006["emp_service"] / emp_hh2006["total_activity"])*np.log(emp_hh2006["emp_service"] /emp_hh2006["total_activity"]))  + \
 ((emp_hh2006["emp_entertain"] / emp_hh2006["total_activity"])*np.log(emp_hh2006["emp_entertain"] /emp_hh2006["total_activity"])) 
 
-emp_hh2006["emp_hh_entropy"] = -emp_hh2006["A"]/np.log(5)
+emp_hh2006["emp_hh_entropy"] = -emp_hh2006["A"]/np.log(6)
 
 ## Employment density
 emp_hh2006["emp_den_acre"] = emp_hh2006["emp_tot"] / emp_hh2006["area_acres"]
@@ -499,8 +499,8 @@ emp_load2007['bg2000'] = emp_load2007['bg2000'].str[:-3]
 emp_load2007['bg2000'] = emp_load2007['bg2000'].apply(add_leading_zero)
 ## Group by bg2000 and sum emp_tot to get total employment by block group
 emp2007 = emp_load2007.groupby('bg2000').sum()
-## Replace 0 values with 0.001 for ln purposes
-emp2007 = emp2007.replace(0, 0.001)
+## Add 1 to every value for ln purposes
+emp2007 += 1
 
 ## Calculate employment entropy
 emp2007["E"] = ((emp2007["emp_retail"]/emp2007["emp_tot"])*np.log(emp2007["emp_retail"]/emp2007["emp_tot"])) + \
@@ -527,7 +527,7 @@ emp_hh2007["A"] = ((emp_hh2007["hh"] / emp_hh2007["total_activity"])*np.log(emp_
 ((emp_hh2007["emp_service"] / emp_hh2007["total_activity"])*np.log(emp_hh2007["emp_service"] /emp_hh2007["total_activity"]))  + \
 ((emp_hh2007["emp_entertain"] / emp_hh2007["total_activity"])*np.log(emp_hh2007["emp_entertain"] /emp_hh2007["total_activity"])) 
 
-emp_hh2007["emp_hh_entropy"] = -emp_hh2007["A"]/np.log(5)
+emp_hh2007["emp_hh_entropy"] = -emp_hh2007["A"]/np.log(6)
 
 ## Employment density
 emp_hh2007["emp_den_acre"] = emp_hh2007["emp_tot"] / emp_hh2007["area_acres"]
@@ -580,8 +580,8 @@ emp_load2008['bg2000'] = emp_load2008['bg2000'].str[:-3]
 emp_load2008['bg2000'] = emp_load2008['bg2000'].apply(add_leading_zero)
 ## Group by bg2000 and sum emp_tot to get total employment by block group
 emp2008 = emp_load2008.groupby('bg2000').sum()
-## Replace 0 values with 0.001 for ln purposes
-emp2008 = emp2008.replace(0, 0.001)
+## Add 1 to every value for ln purposes
+emp2008 += 1
 
 ## Calculate employment entropy
 emp2008["E"] = ((emp2008["emp_retail"]/emp2008["emp_tot"])*np.log(emp2008["emp_retail"]/emp2008["emp_tot"])) + \
@@ -608,7 +608,7 @@ emp_hh2008["A"] = ((emp_hh2008["hh"] / emp_hh2008["total_activity"])*np.log(emp_
 ((emp_hh2008["emp_service"] / emp_hh2008["total_activity"])*np.log(emp_hh2008["emp_service"] /emp_hh2008["total_activity"]))  + \
 ((emp_hh2008["emp_entertain"] / emp_hh2008["total_activity"])*np.log(emp_hh2008["emp_entertain"] /emp_hh2008["total_activity"])) 
 
-emp_hh2008["emp_hh_entropy"] = -emp_hh2008["A"]/np.log(5)
+emp_hh2008["emp_hh_entropy"] = -emp_hh2008["A"]/np.log(6)
 
 ## Employment density
 emp_hh2008["emp_den_acre"] = emp_hh2008["emp_tot"] / emp_hh2008["area_acres"]
@@ -661,8 +661,8 @@ emp_load2009['bg2000'] = emp_load2009['bg2000'].str[:-3]
 emp_load2009['bg2000'] = emp_load2009['bg2000'].apply(add_leading_zero)
 ## Group by bg2000 and sum emp_tot to get total employment by block group
 emp2009 = emp_load2009.groupby('bg2000').sum()
-## Replace 0 values with 0.001 for ln purposes
-emp2009 = emp2009.replace(0, 0.001)
+## Add 1 to every value for ln purposes
+emp2009 += 1
 
 ## Calculate employment entropy
 emp2009["E"] = ((emp2009["emp_retail"]/emp2009["emp_tot"])*np.log(emp2009["emp_retail"]/emp2009["emp_tot"])) + \
@@ -689,7 +689,7 @@ emp_hh2009["A"] = ((emp_hh2009["hh"] / emp_hh2009["total_activity"])*np.log(emp_
 ((emp_hh2009["emp_service"] / emp_hh2009["total_activity"])*np.log(emp_hh2009["emp_service"] /emp_hh2009["total_activity"]))  + \
 ((emp_hh2009["emp_entertain"] / emp_hh2009["total_activity"])*np.log(emp_hh2009["emp_entertain"] /emp_hh2009["total_activity"])) 
 
-emp_hh2009["emp_hh_entropy"] = -emp_hh2009["A"]/np.log(5)
+emp_hh2009["emp_hh_entropy"] = -emp_hh2009["A"]/np.log(6)
 
 ## Employment density
 emp_hh2009["emp_den_acre"] = emp_hh2009["emp_tot"] / emp_hh2009["area_acres"]
@@ -742,8 +742,8 @@ emp_load2010['bg2010'] = emp_load2010['bg2010'].str[:-3]
 emp_load2010['bg2010'] = emp_load2010['bg2010'].apply(add_leading_zero)
 ## Group by bg2010 and sum emp_tot to get total employment by block group
 emp2010 = emp_load2010.groupby('bg2010').sum()
-## Replace 0 values with 0.001 for ln purposes
-emp2010 = emp2010.replace(0, 0.001)
+## Add 1 to every value for ln purposes
+emp2010 += 1
 
 ## Calculate employment entropy
 emp2010["E"] = ((emp2010["emp_retail"]/emp2010["emp_tot"])*np.log(emp2010["emp_retail"]/emp2010["emp_tot"])) + \
@@ -770,7 +770,7 @@ emp_hh2010["A"] = ((emp_hh2010["hh"] / emp_hh2010["total_activity"])*np.log(emp_
 ((emp_hh2010["emp_service"] / emp_hh2010["total_activity"])*np.log(emp_hh2010["emp_service"] /emp_hh2010["total_activity"]))  + \
 ((emp_hh2010["emp_entertain"] / emp_hh2010["total_activity"])*np.log(emp_hh2010["emp_entertain"] /emp_hh2010["total_activity"])) 
 
-emp_hh2010["emp_hh_entropy"] = -emp_hh2010["A"]/np.log(5)
+emp_hh2010["emp_hh_entropy"] = -emp_hh2010["A"]/np.log(6)
 
 ## Employment density
 emp_hh2010["emp_den_acre"] = emp_hh2010["emp_tot"] / emp_hh2010["area_acres"]
@@ -820,8 +820,8 @@ emp_load2011['bg2010'] = emp_load2011['bg2010'].str[:-3]
 emp_load2011['bg2010'] = emp_load2011['bg2010'].apply(add_leading_zero)
 ## Group by bg2010 and sum emp_tot to get total employment by block group
 emp2011 = emp_load2011.groupby('bg2010').sum()
-## Replace 0 values with 0.001 for ln purposes
-emp2011 = emp2011.replace(0, 0.001)
+## Add 1 to every value for ln purposes
+emp2011 += 1
 
 ## Calculate employment entropy
 emp2011["E"] = ((emp2011["emp_retail"]/emp2011["emp_tot"])*np.log(emp2011["emp_retail"]/emp2011["emp_tot"])) + \
@@ -848,7 +848,7 @@ emp_hh2011["A"] = ((emp_hh2011["hh"] / emp_hh2011["total_activity"])*np.log(emp_
 ((emp_hh2011["emp_service"] / emp_hh2011["total_activity"])*np.log(emp_hh2011["emp_service"] /emp_hh2011["total_activity"]))  + \
 ((emp_hh2011["emp_entertain"] / emp_hh2011["total_activity"])*np.log(emp_hh2011["emp_entertain"] /emp_hh2011["total_activity"])) 
 
-emp_hh2011["emp_hh_entropy"] = -emp_hh2011["A"]/np.log(5)
+emp_hh2011["emp_hh_entropy"] = -emp_hh2011["A"]/np.log(6)
 
 ## Employment density
 emp_hh2011["emp_den_acre"] = emp_hh2011["emp_tot"] / emp_hh2011["area_acres"]
@@ -898,8 +898,8 @@ emp_load2012['bg2010'] = emp_load2012['bg2010'].str[:-3]
 emp_load2012['bg2010'] = emp_load2012['bg2010'].apply(add_leading_zero)
 ## Group by bg2010 and sum emp_tot to get total employment by block group
 emp2012 = emp_load2012.groupby('bg2010').sum()
-## Replace 0 values with 0.001 for ln purposes
-emp2012 = emp2012.replace(0, 0.001)
+## Add 1 to every value for ln purposes
+emp2012 += 1
 
 ## Calculate employment entropy
 emp2012["E"] = ((emp2012["emp_retail"]/emp2012["emp_tot"])*np.log(emp2012["emp_retail"]/emp2012["emp_tot"])) + \
@@ -926,7 +926,7 @@ emp_hh2012["A"] = ((emp_hh2012["hh"] / emp_hh2012["total_activity"])*np.log(emp_
 ((emp_hh2012["emp_service"] / emp_hh2012["total_activity"])*np.log(emp_hh2012["emp_service"] /emp_hh2012["total_activity"]))  + \
 ((emp_hh2012["emp_entertain"] / emp_hh2012["total_activity"])*np.log(emp_hh2012["emp_entertain"] /emp_hh2012["total_activity"])) 
 
-emp_hh2012["emp_hh_entropy"] = -emp_hh2012["A"]/np.log(5)
+emp_hh2012["emp_hh_entropy"] = -emp_hh2012["A"]/np.log(6)
 
 ## Employment density
 emp_hh2012["emp_den_acre"] = emp_hh2012["emp_tot"] / emp_hh2012["area_acres"]
@@ -976,8 +976,8 @@ emp_load2013['bg2010'] = emp_load2013['bg2010'].str[:-3]
 emp_load2013['bg2010'] = emp_load2013['bg2010'].apply(add_leading_zero)
 ## Group by bg2010 and sum emp_tot to get total employment by block group
 emp2013 = emp_load2013.groupby('bg2010').sum()
-## Replace 0 values with 0.001 for ln purposes
-emp2013 = emp2013.replace(0, 0.001)
+## Add 1 to every value for ln purposes
+emp2013 += 1
 
 ## Calculate employment entropy
 emp2013["E"] = ((emp2013["emp_retail"]/emp2013["emp_tot"])*np.log(emp2013["emp_retail"]/emp2013["emp_tot"])) + \
@@ -1004,7 +1004,7 @@ emp_hh2013["A"] = ((emp_hh2013["hh"] / emp_hh2013["total_activity"])*np.log(emp_
 ((emp_hh2013["emp_service"] / emp_hh2013["total_activity"])*np.log(emp_hh2013["emp_service"] /emp_hh2013["total_activity"]))  + \
 ((emp_hh2013["emp_entertain"] / emp_hh2013["total_activity"])*np.log(emp_hh2013["emp_entertain"] /emp_hh2013["total_activity"])) 
 
-emp_hh2013["emp_hh_entropy"] = -emp_hh2013["A"]/np.log(5)
+emp_hh2013["emp_hh_entropy"] = -emp_hh2013["A"]/np.log(6)
 
 ## Employment density
 emp_hh2013["emp_den_acre"] = emp_hh2013["emp_tot"] / emp_hh2013["area_acres"]
@@ -1054,8 +1054,8 @@ emp_load2014['bg2010'] = emp_load2014['bg2010'].str[:-3]
 emp_load2014['bg2010'] = emp_load2014['bg2010'].apply(add_leading_zero)
 ## Group by bg2010 and sum emp_tot to get total employment by block group
 emp2014 = emp_load2014.groupby('bg2010').sum()
-## Replace 0 values with 0.001 for ln purposes
-emp2014 = emp2014.replace(0, 0.001)
+## Add 1 to every value for ln purposes
+emp2014 += 1
 
 ## Calculate employment entropy
 emp2014["E"] = ((emp2014["emp_retail"]/emp2014["emp_tot"])*np.log(emp2014["emp_retail"]/emp2014["emp_tot"])) + \
@@ -1082,7 +1082,7 @@ emp_hh2014["A"] = ((emp_hh2014["hh"] / emp_hh2014["total_activity"])*np.log(emp_
 ((emp_hh2014["emp_service"] / emp_hh2014["total_activity"])*np.log(emp_hh2014["emp_service"] /emp_hh2014["total_activity"]))  + \
 ((emp_hh2014["emp_entertain"] / emp_hh2014["total_activity"])*np.log(emp_hh2014["emp_entertain"] /emp_hh2014["total_activity"])) 
 
-emp_hh2014["emp_hh_entropy"] = -emp_hh2014["A"]/np.log(5)
+emp_hh2014["emp_hh_entropy"] = -emp_hh2014["A"]/np.log(6)
 
 ## Employment density
 emp_hh2014["emp_den_acre"] = emp_hh2014["emp_tot"] / emp_hh2014["area_acres"]
@@ -1132,8 +1132,8 @@ emp_load2015['bg2010'] = emp_load2015['bg2010'].str[:-3]
 emp_load2015['bg2010'] = emp_load2015['bg2010'].apply(add_leading_zero)
 ## Group by bg2010 and sum emp_tot to get total employment by block group
 emp2015 = emp_load2015.groupby('bg2010').sum()
-## Replace 0 values with 0.001 for ln purposes
-emp2015 = emp2015.replace(0, 0.001)
+## Add 1 to every value for ln purposes
+emp2015 += 1
 
 ## Calculate employment entropy
 emp2015["E"] = ((emp2015["emp_retail"]/emp2015["emp_tot"])*np.log(emp2015["emp_retail"]/emp2015["emp_tot"])) + \
@@ -1160,7 +1160,7 @@ emp_hh2015["A"] = ((emp_hh2015["hh"] / emp_hh2015["total_activity"])*np.log(emp_
 ((emp_hh2015["emp_service"] / emp_hh2015["total_activity"])*np.log(emp_hh2015["emp_service"] /emp_hh2015["total_activity"]))  + \
 ((emp_hh2015["emp_entertain"] / emp_hh2015["total_activity"])*np.log(emp_hh2015["emp_entertain"] /emp_hh2015["total_activity"])) 
 
-emp_hh2015["emp_hh_entropy"] = -emp_hh2015["A"]/np.log(5)
+emp_hh2015["emp_hh_entropy"] = -emp_hh2015["A"]/np.log(6)
 
 ## Employment density
 emp_hh2015["emp_den_acre"] = emp_hh2015["emp_tot"] / emp_hh2015["area_acres"]
@@ -1210,8 +1210,8 @@ emp_load2016['bg2010'] = emp_load2016['bg2010'].str[:-3]
 emp_load2016['bg2010'] = emp_load2016['bg2010'].apply(add_leading_zero)
 ## Group by bg2010 and sum emp_tot to get total employment by block group
 emp2016 = emp_load2016.groupby('bg2010').sum()
-## Replace 0 values with 0.001 for ln purposes
-emp2016 = emp2016.replace(0, 0.001)
+## Add 1 to every value for ln purposes
+emp2016 += 1
 
 ## Calculate employment entropy
 emp2016["E"] = ((emp2016["emp_retail"]/emp2016["emp_tot"])*np.log(emp2016["emp_retail"]/emp2016["emp_tot"])) + \
@@ -1238,7 +1238,7 @@ emp_hh2016["A"] = ((emp_hh2016["hh"] / emp_hh2016["total_activity"])*np.log(emp_
 ((emp_hh2016["emp_service"] / emp_hh2016["total_activity"])*np.log(emp_hh2016["emp_service"] /emp_hh2016["total_activity"]))  + \
 ((emp_hh2016["emp_entertain"] / emp_hh2016["total_activity"])*np.log(emp_hh2016["emp_entertain"] /emp_hh2016["total_activity"])) 
 
-emp_hh2016["emp_hh_entropy"] = -emp_hh2016["A"]/np.log(5)
+emp_hh2016["emp_hh_entropy"] = -emp_hh2016["A"]/np.log(6)
 
 ## Employment density
 emp_hh2016["emp_den_acre"] = emp_hh2016["emp_tot"] / emp_hh2016["area_acres"]
@@ -1291,8 +1291,8 @@ emp_load2017['bg2010'] = emp_load2017['bg2010'].str[:-3]
 emp_load2017['bg2010'] = emp_load2017['bg2010'].apply(add_leading_zero)
 ## Group by bg2010 and sum emp_tot to get total employment by block group
 emp2017 = emp_load2017.groupby('bg2010').sum()
-## Replace 0 values with 0.001 for ln purposes
-emp2017 = emp2017.replace(0, 0.001)
+## Add 1 to every value for ln purposes
+emp2017 += 1
 
 ## Calculate employment entropy
 emp2017["E"] = ((emp2017["emp_retail"]/emp2017["emp_tot"])*np.log(emp2017["emp_retail"]/emp2017["emp_tot"])) + \
@@ -1319,7 +1319,7 @@ emp_hh2017["A"] = ((emp_hh2017["hh"] / emp_hh2017["total_activity"])*np.log(emp_
 ((emp_hh2017["emp_service"] / emp_hh2017["total_activity"])*np.log(emp_hh2017["emp_service"] /emp_hh2017["total_activity"]))  + \
 ((emp_hh2017["emp_entertain"] / emp_hh2017["total_activity"])*np.log(emp_hh2017["emp_entertain"] /emp_hh2017["total_activity"])) 
 
-emp_hh2017["emp_hh_entropy"] = -emp_hh2017["A"]/np.log(5)
+emp_hh2017["emp_hh_entropy"] = -emp_hh2017["A"]/np.log(6)
 
 ## Employment density
 emp_hh2017["emp_den_acre"] = emp_hh2017["emp_tot"] / emp_hh2017["area_acres"]
@@ -1372,8 +1372,8 @@ emp_load2018['bg2010'] = emp_load2018['bg2010'].str[:-3]
 emp_load2018['bg2010'] = emp_load2018['bg2010'].apply(add_leading_zero)
 ## Group by bg2010 and sum emp_tot to get total employment by block group
 emp2018 = emp_load2018.groupby('bg2010').sum()
-## Replace 0 values with 0.001 for ln purposes
-emp2018 = emp2018.replace(0, 0.001)
+## Add 1 to every value for ln purposes
+emp2018 += 1
 
 ## Calculate employment entropy
 emp2018["E"] = ((emp2018["emp_retail"]/emp2018["emp_tot"])*np.log(emp2018["emp_retail"]/emp2018["emp_tot"])) + \
@@ -1400,7 +1400,7 @@ emp_hh2018["A"] = ((emp_hh2018["hh"] / emp_hh2018["total_activity"])*np.log(emp_
 ((emp_hh2018["emp_service"] / emp_hh2018["total_activity"])*np.log(emp_hh2018["emp_service"] /emp_hh2018["total_activity"]))  + \
 ((emp_hh2018["emp_entertain"] / emp_hh2018["total_activity"])*np.log(emp_hh2018["emp_entertain"] /emp_hh2018["total_activity"])) 
 
-emp_hh2018["emp_hh_entropy"] = -emp_hh2018["A"]/np.log(5)
+emp_hh2018["emp_hh_entropy"] = -emp_hh2018["A"]/np.log(6)
 
 ## Employment density
 emp_hh2018["emp_den_acre"] = emp_hh2018["emp_tot"] / emp_hh2018["area_acres"]
@@ -1453,8 +1453,8 @@ emp_load2019['bg2010'] = emp_load2019['bg2010'].str[:-3]
 emp_load2019['bg2010'] = emp_load2019['bg2010'].apply(add_leading_zero)
 ## Group by bg2010 and sum emp_tot to get total employment by block group
 emp2019 = emp_load2019.groupby('bg2010').sum()
-## Replace 0 values with 0.001 for ln purposes
-emp2019 = emp2019.replace(0, 0.001)
+## Add 1 to every value for ln purposes
+emp2019 += 1
 
 ## Calculate employment entropy
 emp2019["E"] = ((emp2019["emp_retail"]/emp2019["emp_tot"])*np.log(emp2019["emp_retail"]/emp2019["emp_tot"])) + \
@@ -1481,7 +1481,7 @@ emp_hh2019["A"] = ((emp_hh2019["hh"] / emp_hh2019["total_activity"])*np.log(emp_
 ((emp_hh2019["emp_service"] / emp_hh2019["total_activity"])*np.log(emp_hh2019["emp_service"] /emp_hh2019["total_activity"]))  + \
 ((emp_hh2019["emp_entertain"] / emp_hh2019["total_activity"])*np.log(emp_hh2019["emp_entertain"] /emp_hh2019["total_activity"])) 
 
-emp_hh2019["emp_hh_entropy"] = -emp_hh2019["A"]/np.log(5)
+emp_hh2019["emp_hh_entropy"] = -emp_hh2019["A"]/np.log(6)
 
 ## Employment density
 emp_hh2019["emp_den_acre"] = emp_hh2019["emp_tot"] / emp_hh2019["area_acres"]
@@ -1534,8 +1534,8 @@ emp_load2020['bg2020'] = emp_load2020['bg2020'].str[:-3]
 emp_load2020['bg2020'] = emp_load2020['bg2020'].apply(add_leading_zero)
 ## Group by bg2020 and sum emp_tot to get total employment by block group
 emp2020 = emp_load2020.groupby('bg2020').sum()
-## Replace 0 values with 0.001 for ln purposes
-emp2020 = emp2020.replace(0, 0.001)
+## Add 1 to every value for ln purposes
+emp2020 += 1
 
 ## Calculate employment entropy
 emp2020["E"] = ((emp2020["emp_retail"]/emp2020["emp_tot"])*np.log(emp2020["emp_retail"]/emp2020["emp_tot"])) + \
@@ -1562,7 +1562,7 @@ emp_hh2020["A"] = ((emp_hh2020["hh"] / emp_hh2020["total_activity"])*np.log(emp_
 ((emp_hh2020["emp_service"] / emp_hh2020["total_activity"])*np.log(emp_hh2020["emp_service"] /emp_hh2020["total_activity"]))  + \
 ((emp_hh2020["emp_entertain"] / emp_hh2020["total_activity"])*np.log(emp_hh2020["emp_entertain"] /emp_hh2020["total_activity"])) 
 
-emp_hh2020["emp_hh_entropy"] = -emp_hh2020["A"]/np.log(5)
+emp_hh2020["emp_hh_entropy"] = -emp_hh2020["A"]/np.log(6)
 
 ## Employment density
 emp_hh2020["emp_den_acre"] = emp_hh2020["emp_tot"] / emp_hh2020["area_acres"]
@@ -1615,8 +1615,8 @@ emp_load2021['bg2020'] = emp_load2021['bg2020'].str[:-3]
 emp_load2021['bg2020'] = emp_load2021['bg2020'].apply(add_leading_zero)
 ## Group by bg2020 and sum emp_tot to get total employment by block group
 emp2021 = emp_load2021.groupby('bg2020').sum()
-## Replace 0 values with 0.001 for ln purposes
-emp2021 = emp2021.replace(0, 0.001)
+## Add 1 to every value for ln purposes
+emp2021 += 1
 
 ## Calculate employment entropy
 emp2021["E"] = ((emp2021["emp_retail"]/emp2021["emp_tot"])*np.log(emp2021["emp_retail"]/emp2021["emp_tot"])) + \
@@ -1643,7 +1643,7 @@ emp_hh2021["A"] = ((emp_hh2021["hh"] / emp_hh2021["total_activity"])*np.log(emp_
 ((emp_hh2021["emp_service"] / emp_hh2021["total_activity"])*np.log(emp_hh2021["emp_service"] /emp_hh2021["total_activity"]))  + \
 ((emp_hh2021["emp_entertain"] / emp_hh2021["total_activity"])*np.log(emp_hh2021["emp_entertain"] /emp_hh2021["total_activity"])) 
 
-emp_hh2021["emp_hh_entropy"] = -emp_hh2021["A"]/np.log(5)
+emp_hh2021["emp_hh_entropy"] = -emp_hh2021["A"]/np.log(6)
 
 ## Employment density
 emp_hh2021["emp_den_acre"] = emp_hh2021["emp_tot"] / emp_hh2021["area_acres"]
@@ -1696,8 +1696,8 @@ emp_load2022['bg2020'] = emp_load2022['bg2020'].str[:-3]
 emp_load2022['bg2020'] = emp_load2022['bg2020'].apply(add_leading_zero)
 ## Group by bg2020 and sum emp_tot to get total employment by block group
 emp2022 = emp_load2022.groupby('bg2020').sum()
-## Replace 0 values with 0.001 for ln purposes
-emp2022 = emp2022.replace(0, 0.001)
+## Add 1 to every value for ln purposes
+emp2022 += 1
 
 ## Calculate employment entropy
 emp2022["E"] = ((emp2022["emp_retail"]/emp2022["emp_tot"])*np.log(emp2022["emp_retail"]/emp2022["emp_tot"])) + \
@@ -1724,7 +1724,7 @@ emp_hh2022["A"] = ((emp_hh2022["hh"] / emp_hh2022["total_activity"])*np.log(emp_
 ((emp_hh2022["emp_service"] / emp_hh2022["total_activity"])*np.log(emp_hh2022["emp_service"] /emp_hh2022["total_activity"]))  + \
 ((emp_hh2022["emp_entertain"] / emp_hh2022["total_activity"])*np.log(emp_hh2022["emp_entertain"] /emp_hh2022["total_activity"])) 
 
-emp_hh2022["emp_hh_entropy"] = -emp_hh2022["A"]/np.log(5)
+emp_hh2022["emp_hh_entropy"] = -emp_hh2022["A"]/np.log(6)
 
 ## Employment density
 emp_hh2022["emp_den_acre"] = emp_hh2022["emp_tot"] / emp_hh2022["area_acres"]

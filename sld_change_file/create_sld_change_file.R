@@ -85,20 +85,20 @@ sld_v3 <- sld_change_file %>%
 san_diego_fips <- "06073"
 
 san_diego_2010 <- sld_v2 %>%
-  filter(substr(geoid, 1, 5) == san_diego_fips & year == 2010)
+  filter(substr(bg2010, 1, 5) == san_diego_fips & year == 2010)
 
 san_diego_2018 <- sld_v3 %>%
-  filter(substr(geoid, 1, 5) == san_diego_fips & year == 2018)
+  filter(substr(bg2010, 1, 5) == san_diego_fips & year == 2018)
 
 
 san_diego_bgs <- block_groups("California", "San Diego", year = 2010)
 
 san_diego_2010 <- san_diego_bgs %>% 
-  left_join(san_diego_2010, by = c("GEOID10" = "geoid")) %>%
+  left_join(san_diego_2010, by = c("GEOID10" = "bg2010")) %>%
   filter(r_lowwagewk_pct <= 1)
 
 san_diego_2018 <- san_diego_bgs %>% 
-  left_join(san_diego_2018, by = c("GEOID10" = "geoid")) %>%
+  left_join(san_diego_2018, by = c("GEOID10" = "bg2010")) %>%
   filter(r_lowwagewk_pct <= 1)
 
 san_diego_2010_transit <- san_diego_2010[san_diego_2010$transit_jobs45>=0, ]
@@ -222,7 +222,7 @@ ggplot() +
   labs(title = "Northern Virginia PM Transit Distance (2018)") + 
   scale_fill_manual(values = c("firebrick", "royalblue", "seagreen3", "purple"))
   
-# Doesn't make sense...
+# Doesn't make sense...bus routes were changed?
 
 # Write Out to CSV --------------------------------------------------------
 write.csv(sld_v2, "./outputs/sld_change_file2010.csv", row.names = F)
