@@ -21,12 +21,23 @@ pd.set_option('display.max_colwidth', None)
 # Set working directory
 os.chdir('D:/neeco/rdc_census/lehd_change_file/')
 
+# Read in crosswalk files
+nhgis_blk2000_bg2010 = pd.read_csv("./nhgis_blk2000_bg2010.csv")
+nhgis_blk2020_bg2010 = pd.read_csv("./nhgis_blk2020_bg2010.csv")
+
 # Helper functions
 def add_leading_zero(value):
-	if len(value) == 11:
+	if len(value) == 11 or len(value) == 14:
 		return '0' + value
 	else:
 		return value
+	
+# Edit crosswalk files
+nhgis_blk2000_bg2010['blk2000ge'] = nhgis_blk2000_bg2010['blk2000ge'].astype(str).apply(add_leading_zero)
+nhgis_blk2000_bg2010['bg2010ge'] = nhgis_blk2000_bg2010['bg2010ge'].astype(str).apply(add_leading_zero)
+
+nhgis_blk2020_bg2010['blk2020ge'] = nhgis_blk2020_bg2010['blk2020ge'].astype(str).apply(add_leading_zero)
+nhgis_blk2020_bg2010['bg2010ge'] = nhgis_blk2020_bg2010['bg2010ge'].astype(str).apply(add_leading_zero)
 
 # Create Lookup for States
 # Get dataframe of FIPS codes and states (50 states plus DC)
@@ -75,27 +86,36 @@ emp_load = pd.concat(emp_load)
 emp_load2002 = emp_load.reset_index()
 
 ## Calculate employment by industry
-emp_load2002["bg2000"] = emp_load2002["w_geocode"]
+emp_load2002["blk2000"] = emp_load2002["w_geocode"]
 emp_load2002["emp_tot"] = emp_load2002["C000"]
 emp_load2002["emp_retail"] = emp_load2002["CNS07"]
 emp_load2002["emp_office"] = emp_load2002["CNS09"] + emp_load2002["CNS10"] + emp_load2002["CNS11"] + emp_load2002["CNS13"] + emp_load2002["CNS20"]
 emp_load2002["emp_industrial"] =  emp_load2002["CNS01"] + emp_load2002["CNS02"] + emp_load2002["CNS03"] + emp_load2002["CNS04"] + emp_load2002["CNS05"] + emp_load2002["CNS06"] + emp_load2002["CNS08"]
 emp_load2002["emp_service"] = emp_load2002["CNS12"] + emp_load2002["CNS14"] + emp_load2002["CNS15"] + emp_load2002["CNS16"] + emp_load2002["CNS19"]
-emp_load2002["emp_entertain"] =  emp_load2002["CNS17"] + emp_load["CNS18"]																	
+emp_load2002["emp_entertain"] =  emp_load2002["CNS17"] + emp_load2002["CNS18"]																	
 
-## Rename columns
-emp_load2002 = emp_load2002[["bg2000", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
+## Select columns
+emp_load2002 = emp_load2002[["blk2000", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
 
-## Convert bg2000 to string
-emp_load2002['bg2000'] = emp_load2002['bg2000'].astype(str)
-## Remove last three characters
-emp_load2002['bg2000'] = emp_load2002['bg2000'].str[:-3]
-## Add leading zeros
-emp_load2002['bg2000'] = emp_load2002['bg2000'].apply(add_leading_zero)
-## Group by bg2000 and sum emp_tot to get total employment by block group
-emp2002 = emp_load2002.groupby('bg2000').sum()
+## Convert blk2000 to string
+emp_load2002['blk2000'] = emp_load2002['blk2000'].astype(str).apply(add_leading_zero)
+
+## Join on crosswalks and aggregate
+emp2002 = pd.merge(emp_load2002, nhgis_blk2000_bg2010, how='left', left_on = "blk2000", right_on = "blk2000ge")
+emp2002 = emp2002[["bg2010ge", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain", "weight"]]
+## Multiply by weight
+emp_columns = ["emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]
+emp2002[emp_columns].multiply(emp2002["weight"], axis="index")
+
+## And sum within 2010 block groups
+emp2002 = emp2002.groupby("bg2010ge", as_index=False).sum()
+emp2002 = emp2002.rename(columns={'bg2010ge': 'bg2010'})
+
+## Drop weight column
+emp2002 = emp2002.drop(["weight"], axis = 1)
+
 ## Add 1 to every value for ln purposes
-emp2002 += 1
+emp2002[emp_columns] += 1
 
 ## Calculate employment entropy
 emp2002["E"] = ((emp2002["emp_retail"]/emp2002["emp_tot"])*np.log(emp2002["emp_retail"]/emp2002["emp_tot"])) + \
@@ -109,10 +129,10 @@ emp2002["emp_entropy"] = -emp2002["E"]/np.log(5)
 ## Calculate employment and housing entropy
 ## Join with housing info from ACS
 acs2002 = pd.read_csv("../acs_change_file/outputs/acs2002.csv")
-acs2002["bg2000"] = acs2002['bg2000'].astype(str).apply(add_leading_zero)
+acs2002["bg2010"] = acs2002['bg2010'].astype(str).apply(add_leading_zero)
 acs2002["hh"]  = acs2002["area_acres"] * acs2002["hh_den_acre"]
 
-emp_hh2002 = pd.merge(emp2002, acs2002, on = "bg2000", how = "left")
+emp_hh2002 = pd.merge(emp2002, acs2002, on = "bg2010", how = "left")
 
 emp_hh2002["total_activity"] = emp_hh2002["hh"] + emp_hh2002["emp_tot"]
 emp_hh2002["A"] = ((emp_hh2002["hh"] / emp_hh2002["total_activity"])*np.log(emp_hh2002["hh"] /emp_hh2002["total_activity"])) + \
@@ -133,7 +153,7 @@ emp_hh2002["pop"] = emp_hh2002["pop_den_acre"] * emp_hh2002["area_acres"]
 emp_hh2002["emp_pop_den_acre"] = (emp_hh2002["emp_tot"] + emp_hh2002["pop"]) / emp_hh2002["area_acres"]
 
 ## Add year
-lehd2002 = emp_hh2002[["bg2000", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
+lehd2002 = emp_hh2002[["bg2010", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
 print(lehd2002.head())
 print(lehd2002.shape)
 lehd2002.to_csv("./outputs/lehd2002.csv", index = False)
@@ -156,27 +176,36 @@ emp_load = pd.concat(emp_load)
 emp_load2003 = emp_load.reset_index()
 
 ## Calculate employment by industry
-emp_load2003["bg2000"] = emp_load2003["w_geocode"]
+emp_load2003["blk2000"] = emp_load2003["w_geocode"]
 emp_load2003["emp_tot"] = emp_load2003["C000"]
 emp_load2003["emp_retail"] = emp_load2003["CNS07"]
 emp_load2003["emp_office"] = emp_load2003["CNS09"] + emp_load2003["CNS10"] + emp_load2003["CNS11"] + emp_load2003["CNS13"] + emp_load2003["CNS20"]
 emp_load2003["emp_industrial"] =  emp_load2003["CNS01"] + emp_load2003["CNS02"] + emp_load2003["CNS03"] + emp_load2003["CNS04"] + emp_load2003["CNS05"] + emp_load2003["CNS06"] + emp_load2003["CNS08"]
 emp_load2003["emp_service"] = emp_load2003["CNS12"] + emp_load2003["CNS14"] + emp_load2003["CNS15"] + emp_load2003["CNS16"] + emp_load2003["CNS19"]
-emp_load2003["emp_entertain"] =  emp_load2003["CNS17"] + emp_load["CNS18"]																	
+emp_load2003["emp_entertain"] =  emp_load2003["CNS17"] + emp_load2003["CNS18"]																	
 
-## Rename columns
-emp_load2003 = emp_load2003[["bg2000", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
+## Select columns
+emp_load2003 = emp_load2003[["blk2000", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
 
-## Convert bg2000 to string
-emp_load2003['bg2000'] = emp_load2003['bg2000'].astype(str)
-## Remove last three characters
-emp_load2003['bg2000'] = emp_load2003['bg2000'].str[:-3]
-## Add leading zeros
-emp_load2003['bg2000'] = emp_load2003['bg2000'].apply(add_leading_zero)
-## Group by bg2000 and sum emp_tot to get total employment by block group
-emp2003 = emp_load2003.groupby('bg2000').sum()
+## Convert blk2000 to string
+emp_load2003['blk2000'] = emp_load2003['blk2000'].astype(str).apply(add_leading_zero)
+
+## Join on crosswalks and aggregate
+emp2003 = pd.merge(emp_load2003, nhgis_blk2000_bg2010, how='left', left_on = "blk2000", right_on = "blk2000ge")
+emp2003 = emp2003[["bg2010ge", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain", "weight"]]
+## Multiply by weight
+emp_columns = ["emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]
+emp2003[emp_columns].multiply(emp2003["weight"], axis="index")
+
+## And sum within 2010 block groups
+emp2003 = emp2003.groupby("bg2010ge", as_index=False).sum()
+emp2003 = emp2003.rename(columns={'bg2010ge': 'bg2010'})
+
+## Drop weight column
+emp2003 = emp2003.drop(["weight"], axis = 1)
+
 ## Add 1 to every value for ln purposes
-emp2003 += 1
+emp2003[emp_columns] += 1
 
 ## Calculate employment entropy
 emp2003["E"] = ((emp2003["emp_retail"]/emp2003["emp_tot"])*np.log(emp2003["emp_retail"]/emp2003["emp_tot"])) + \
@@ -190,10 +219,10 @@ emp2003["emp_entropy"] = -emp2003["E"]/np.log(5)
 ## Calculate employment and housing entropy
 ## Join with housing info from ACS
 acs2003 = pd.read_csv("../acs_change_file/outputs/acs2003.csv")
-acs2003["bg2000"] = acs2003['bg2000'].astype(str).apply(add_leading_zero)
+acs2003["bg2010"] = acs2003['bg2010'].astype(str).apply(add_leading_zero)
 acs2003["hh"]  = acs2003["area_acres"] * acs2003["hh_den_acre"]
 
-emp_hh2003 = pd.merge(emp2003, acs2003, on = "bg2000", how = "left")
+emp_hh2003 = pd.merge(emp2003, acs2003, on = "bg2010", how = "left")
 
 emp_hh2003["total_activity"] = emp_hh2003["hh"] + emp_hh2003["emp_tot"]
 emp_hh2003["A"] = ((emp_hh2003["hh"] / emp_hh2003["total_activity"])*np.log(emp_hh2003["hh"] /emp_hh2003["total_activity"])) + \
@@ -214,7 +243,7 @@ emp_hh2003["pop"] = emp_hh2003["pop_den_acre"] * emp_hh2003["area_acres"]
 emp_hh2003["emp_pop_den_acre"] = (emp_hh2003["emp_tot"] + emp_hh2003["pop"]) / emp_hh2003["area_acres"]
 
 ## Add year
-lehd2003 = emp_hh2003[["bg2000", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
+lehd2003 = emp_hh2003[["bg2010", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
 print(lehd2003.head())
 print(lehd2003.shape)
 lehd2003.to_csv("./outputs/lehd2003.csv", index = False)
@@ -237,27 +266,36 @@ emp_load = pd.concat(emp_load)
 emp_load2004 = emp_load.reset_index()
 
 ## Calculate employment by industry
-emp_load2004["bg2000"] = emp_load2004["w_geocode"]
+emp_load2004["blk2000"] = emp_load2004["w_geocode"]
 emp_load2004["emp_tot"] = emp_load2004["C000"]
 emp_load2004["emp_retail"] = emp_load2004["CNS07"]
 emp_load2004["emp_office"] = emp_load2004["CNS09"] + emp_load2004["CNS10"] + emp_load2004["CNS11"] + emp_load2004["CNS13"] + emp_load2004["CNS20"]
 emp_load2004["emp_industrial"] =  emp_load2004["CNS01"] + emp_load2004["CNS02"] + emp_load2004["CNS03"] + emp_load2004["CNS04"] + emp_load2004["CNS05"] + emp_load2004["CNS06"] + emp_load2004["CNS08"]
 emp_load2004["emp_service"] = emp_load2004["CNS12"] + emp_load2004["CNS14"] + emp_load2004["CNS15"] + emp_load2004["CNS16"] + emp_load2004["CNS19"]
-emp_load2004["emp_entertain"] =  emp_load2004["CNS17"] + emp_load["CNS18"]																	
+emp_load2004["emp_entertain"] =  emp_load2004["CNS17"] + emp_load2004["CNS18"]																	
 
-## Rename columns
-emp_load2004 = emp_load2004[["bg2000", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
+## Select columns
+emp_load2004 = emp_load2004[["blk2000", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
 
-## Convert bg2000 to string
-emp_load2004['bg2000'] = emp_load2004['bg2000'].astype(str)
-## Remove last three characters
-emp_load2004['bg2000'] = emp_load2004['bg2000'].str[:-3]
-## Add leading zeros
-emp_load2004['bg2000'] = emp_load2004['bg2000'].apply(add_leading_zero)
-## Group by bg2000 and sum emp_tot to get total employment by block group
-emp2004 = emp_load2004.groupby('bg2000').sum()
+## Convert blk2000 to string
+emp_load2004['blk2000'] = emp_load2004['blk2000'].astype(str).apply(add_leading_zero)
+
+## Join on crosswalks and aggregate
+emp2004 = pd.merge(emp_load2004, nhgis_blk2000_bg2010, how='left', left_on = "blk2000", right_on = "blk2000ge")
+emp2004 = emp2004[["bg2010ge", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain", "weight"]]
+## Multiply by weight
+emp_columns = ["emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]
+emp2004[emp_columns].multiply(emp2004["weight"], axis="index")
+
+## And sum within 2010 block groups
+emp2004 = emp2004.groupby("bg2010ge", as_index=False).sum()
+emp2004 = emp2004.rename(columns={'bg2010ge': 'bg2010'})
+
+## Drop weight column
+emp2004 = emp2004.drop(["weight"], axis = 1)
+
 ## Add 1 to every value for ln purposes
-emp2004 += 1
+emp2004[emp_columns] += 1
 
 ## Calculate employment entropy
 emp2004["E"] = ((emp2004["emp_retail"]/emp2004["emp_tot"])*np.log(emp2004["emp_retail"]/emp2004["emp_tot"])) + \
@@ -271,10 +309,10 @@ emp2004["emp_entropy"] = -emp2004["E"]/np.log(5)
 ## Calculate employment and housing entropy
 ## Join with housing info from ACS
 acs2004 = pd.read_csv("../acs_change_file/outputs/acs2004.csv")
-acs2004["bg2000"] = acs2004['bg2000'].astype(str).apply(add_leading_zero)
+acs2004["bg2010"] = acs2004['bg2010'].astype(str).apply(add_leading_zero)
 acs2004["hh"]  = acs2004["area_acres"] * acs2004["hh_den_acre"]
 
-emp_hh2004 = pd.merge(emp2004, acs2004, on = "bg2000", how = "left")
+emp_hh2004 = pd.merge(emp2004, acs2004, on = "bg2010", how = "left")
 
 emp_hh2004["total_activity"] = emp_hh2004["hh"] + emp_hh2004["emp_tot"]
 emp_hh2004["A"] = ((emp_hh2004["hh"] / emp_hh2004["total_activity"])*np.log(emp_hh2004["hh"] /emp_hh2004["total_activity"])) + \
@@ -295,7 +333,7 @@ emp_hh2004["pop"] = emp_hh2004["pop_den_acre"] * emp_hh2004["area_acres"]
 emp_hh2004["emp_pop_den_acre"] = (emp_hh2004["emp_tot"] + emp_hh2004["pop"]) / emp_hh2004["area_acres"]
 
 ## Add year
-lehd2004 = emp_hh2004[["bg2000", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
+lehd2004 = emp_hh2004[["bg2010", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
 print(lehd2004.head())
 print(lehd2004.shape)
 lehd2004.to_csv("./outputs/lehd2004.csv", index = False)
@@ -318,27 +356,36 @@ emp_load = pd.concat(emp_load)
 emp_load2005 = emp_load.reset_index()
 
 ## Calculate employment by industry
-emp_load2005["bg2000"] = emp_load2005["w_geocode"]
+emp_load2005["blk2000"] = emp_load2005["w_geocode"]
 emp_load2005["emp_tot"] = emp_load2005["C000"]
 emp_load2005["emp_retail"] = emp_load2005["CNS07"]
 emp_load2005["emp_office"] = emp_load2005["CNS09"] + emp_load2005["CNS10"] + emp_load2005["CNS11"] + emp_load2005["CNS13"] + emp_load2005["CNS20"]
 emp_load2005["emp_industrial"] =  emp_load2005["CNS01"] + emp_load2005["CNS02"] + emp_load2005["CNS03"] + emp_load2005["CNS04"] + emp_load2005["CNS05"] + emp_load2005["CNS06"] + emp_load2005["CNS08"]
 emp_load2005["emp_service"] = emp_load2005["CNS12"] + emp_load2005["CNS14"] + emp_load2005["CNS15"] + emp_load2005["CNS16"] + emp_load2005["CNS19"]
-emp_load2005["emp_entertain"] =  emp_load2005["CNS17"] + emp_load["CNS18"]																	
+emp_load2005["emp_entertain"] =  emp_load2005["CNS17"] + emp_load2005["CNS18"]																	
 
-## Rename columns
-emp_load2005 = emp_load2005[["bg2000", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
+## Select columns
+emp_load2005 = emp_load2005[["blk2000", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
 
-## Convert bg2000 to string
-emp_load2005['bg2000'] = emp_load2005['bg2000'].astype(str)
-## Remove last three characters
-emp_load2005['bg2000'] = emp_load2005['bg2000'].str[:-3]
-## Add leading zeros
-emp_load2005['bg2000'] = emp_load2005['bg2000'].apply(add_leading_zero)
-## Group by bg2000 and sum emp_tot to get total employment by block group
-emp2005 = emp_load2005.groupby('bg2000').sum()
+## Convert blk2000 to string
+emp_load2005['blk2000'] = emp_load2005['blk2000'].astype(str).apply(add_leading_zero)
+
+## Join on crosswalks and aggregate
+emp2005 = pd.merge(emp_load2005, nhgis_blk2000_bg2010, how='left', left_on = "blk2000", right_on = "blk2000ge")
+emp2005 = emp2005[["bg2010ge", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain", "weight"]]
+## Multiply by weight
+emp_columns = ["emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]
+emp2005[emp_columns].multiply(emp2005["weight"], axis="index")
+
+## And sum within 2010 block groups
+emp2005 = emp2005.groupby("bg2010ge", as_index=False).sum()
+emp2005 = emp2005.rename(columns={'bg2010ge': 'bg2010'})
+
+## Drop weight column
+emp2005 = emp2005.drop(["weight"], axis = 1)
+
 ## Add 1 to every value for ln purposes
-emp2005 += 1
+emp2005[emp_columns] += 1
 
 ## Calculate employment entropy
 emp2005["E"] = ((emp2005["emp_retail"]/emp2005["emp_tot"])*np.log(emp2005["emp_retail"]/emp2005["emp_tot"])) + \
@@ -352,10 +399,10 @@ emp2005["emp_entropy"] = -emp2005["E"]/np.log(5)
 ## Calculate employment and housing entropy
 ## Join with housing info from ACS
 acs2005 = pd.read_csv("../acs_change_file/outputs/acs2005.csv")
-acs2005["bg2000"] = acs2005['bg2000'].astype(str).apply(add_leading_zero)
+acs2005["bg2010"] = acs2005['bg2010'].astype(str).apply(add_leading_zero)
 acs2005["hh"]  = acs2005["area_acres"] * acs2005["hh_den_acre"]
 
-emp_hh2005 = pd.merge(emp2005, acs2005, on = "bg2000", how = "left")
+emp_hh2005 = pd.merge(emp2005, acs2005, on = "bg2010", how = "left")
 
 emp_hh2005["total_activity"] = emp_hh2005["hh"] + emp_hh2005["emp_tot"]
 emp_hh2005["A"] = ((emp_hh2005["hh"] / emp_hh2005["total_activity"])*np.log(emp_hh2005["hh"] /emp_hh2005["total_activity"])) + \
@@ -376,7 +423,7 @@ emp_hh2005["pop"] = emp_hh2005["pop_den_acre"] * emp_hh2005["area_acres"]
 emp_hh2005["emp_pop_den_acre"] = (emp_hh2005["emp_tot"] + emp_hh2005["pop"]) / emp_hh2005["area_acres"]
 
 ## Add year
-lehd2005 = emp_hh2005[["bg2000", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
+lehd2005 = emp_hh2005[["bg2010", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
 print(lehd2005.head())
 print(lehd2005.shape)
 lehd2005.to_csv("./outputs/lehd2005.csv", index = False)
@@ -399,27 +446,36 @@ emp_load = pd.concat(emp_load)
 emp_load2006 = emp_load.reset_index()
 
 ## Calculate employment by industry
-emp_load2006["bg2000"] = emp_load2006["w_geocode"]
+emp_load2006["blk2000"] = emp_load2006["w_geocode"]
 emp_load2006["emp_tot"] = emp_load2006["C000"]
 emp_load2006["emp_retail"] = emp_load2006["CNS07"]
 emp_load2006["emp_office"] = emp_load2006["CNS09"] + emp_load2006["CNS10"] + emp_load2006["CNS11"] + emp_load2006["CNS13"] + emp_load2006["CNS20"]
 emp_load2006["emp_industrial"] =  emp_load2006["CNS01"] + emp_load2006["CNS02"] + emp_load2006["CNS03"] + emp_load2006["CNS04"] + emp_load2006["CNS05"] + emp_load2006["CNS06"] + emp_load2006["CNS08"]
 emp_load2006["emp_service"] = emp_load2006["CNS12"] + emp_load2006["CNS14"] + emp_load2006["CNS15"] + emp_load2006["CNS16"] + emp_load2006["CNS19"]
-emp_load2006["emp_entertain"] =  emp_load2006["CNS17"] + emp_load["CNS18"]																	
+emp_load2006["emp_entertain"] =  emp_load2006["CNS17"] + emp_load2006["CNS18"]																	
 
-## Rename columns
-emp_load2006 = emp_load2006[["bg2000", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
+## Select columns
+emp_load2006 = emp_load2006[["blk2000", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
 
-## Convert bg2000 to string
-emp_load2006['bg2000'] = emp_load2006['bg2000'].astype(str)
-## Remove last three characters
-emp_load2006['bg2000'] = emp_load2006['bg2000'].str[:-3]
-## Add leading zeros
-emp_load2006['bg2000'] = emp_load2006['bg2000'].apply(add_leading_zero)
-## Group by bg2000 and sum emp_tot to get total employment by block group
-emp2006 = emp_load2006.groupby('bg2000').sum()
+## Convert blk2000 to string
+emp_load2006['blk2000'] = emp_load2006['blk2000'].astype(str).apply(add_leading_zero)
+
+## Join on crosswalks and aggregate
+emp2006 = pd.merge(emp_load2006, nhgis_blk2000_bg2010, how='left', left_on = "blk2000", right_on = "blk2000ge")
+emp2006 = emp2006[["bg2010ge", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain", "weight"]]
+## Multiply by weight
+emp_columns = ["emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]
+emp2006[emp_columns].multiply(emp2006["weight"], axis="index")
+
+## And sum within 2010 block groups
+emp2006 = emp2006.groupby("bg2010ge", as_index=False).sum()
+emp2006 = emp2006.rename(columns={'bg2010ge': 'bg2010'})
+
+## Drop weight column
+emp2006 = emp2006.drop(["weight"], axis = 1)
+
 ## Add 1 to every value for ln purposes
-emp2006 += 1
+emp2006[emp_columns] += 1
 
 ## Calculate employment entropy
 emp2006["E"] = ((emp2006["emp_retail"]/emp2006["emp_tot"])*np.log(emp2006["emp_retail"]/emp2006["emp_tot"])) + \
@@ -433,10 +489,10 @@ emp2006["emp_entropy"] = -emp2006["E"]/np.log(5)
 ## Calculate employment and housing entropy
 ## Join with housing info from ACS
 acs2006 = pd.read_csv("../acs_change_file/outputs/acs2006.csv")
-acs2006["bg2000"] = acs2006['bg2000'].astype(str).apply(add_leading_zero)
+acs2006["bg2010"] = acs2006['bg2010'].astype(str).apply(add_leading_zero)
 acs2006["hh"]  = acs2006["area_acres"] * acs2006["hh_den_acre"]
 
-emp_hh2006 = pd.merge(emp2006, acs2006, on = "bg2000", how = "left")
+emp_hh2006 = pd.merge(emp2006, acs2006, on = "bg2010", how = "left")
 
 emp_hh2006["total_activity"] = emp_hh2006["hh"] + emp_hh2006["emp_tot"]
 emp_hh2006["A"] = ((emp_hh2006["hh"] / emp_hh2006["total_activity"])*np.log(emp_hh2006["hh"] /emp_hh2006["total_activity"])) + \
@@ -457,7 +513,7 @@ emp_hh2006["pop"] = emp_hh2006["pop_den_acre"] * emp_hh2006["area_acres"]
 emp_hh2006["emp_pop_den_acre"] = (emp_hh2006["emp_tot"] + emp_hh2006["pop"]) / emp_hh2006["area_acres"]
 
 ## Add year
-lehd2006 = emp_hh2006[["bg2000", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
+lehd2006 = emp_hh2006[["bg2010", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
 print(lehd2006.head())
 print(lehd2006.shape)
 lehd2006.to_csv("./outputs/lehd2006.csv", index = False)
@@ -480,27 +536,36 @@ emp_load = pd.concat(emp_load)
 emp_load2007 = emp_load.reset_index()
 
 ## Calculate employment by industry
-emp_load2007["bg2000"] = emp_load2007["w_geocode"]
+emp_load2007["blk2000"] = emp_load2007["w_geocode"]
 emp_load2007["emp_tot"] = emp_load2007["C000"]
 emp_load2007["emp_retail"] = emp_load2007["CNS07"]
 emp_load2007["emp_office"] = emp_load2007["CNS09"] + emp_load2007["CNS10"] + emp_load2007["CNS11"] + emp_load2007["CNS13"] + emp_load2007["CNS20"]
 emp_load2007["emp_industrial"] =  emp_load2007["CNS01"] + emp_load2007["CNS02"] + emp_load2007["CNS03"] + emp_load2007["CNS04"] + emp_load2007["CNS05"] + emp_load2007["CNS06"] + emp_load2007["CNS08"]
 emp_load2007["emp_service"] = emp_load2007["CNS12"] + emp_load2007["CNS14"] + emp_load2007["CNS15"] + emp_load2007["CNS16"] + emp_load2007["CNS19"]
-emp_load2007["emp_entertain"] =  emp_load2007["CNS17"] + emp_load["CNS18"]																	
+emp_load2007["emp_entertain"] =  emp_load2007["CNS17"] + emp_load2007["CNS18"]																	
 
-## Rename columns
-emp_load2007 = emp_load2007[["bg2000", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
+## Select columns
+emp_load2007 = emp_load2007[["blk2000", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
 
-## Convert bg2000 to string
-emp_load2007['bg2000'] = emp_load2007['bg2000'].astype(str)
-## Remove last three characters
-emp_load2007['bg2000'] = emp_load2007['bg2000'].str[:-3]
-## Add leading zeros
-emp_load2007['bg2000'] = emp_load2007['bg2000'].apply(add_leading_zero)
-## Group by bg2000 and sum emp_tot to get total employment by block group
-emp2007 = emp_load2007.groupby('bg2000').sum()
+## Convert blk2000 to string
+emp_load2007['blk2000'] = emp_load2007['blk2000'].astype(str).apply(add_leading_zero)
+
+## Join on crosswalks and aggregate
+emp2007 = pd.merge(emp_load2007, nhgis_blk2000_bg2010, how='left', left_on = "blk2000", right_on = "blk2000ge")
+emp2007 = emp2007[["bg2010ge", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain", "weight"]]
+## Multiply by weight
+emp_columns = ["emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]
+emp2007[emp_columns].multiply(emp2007["weight"], axis="index")
+
+## And sum within 2010 block groups
+emp2007 = emp2007.groupby("bg2010ge", as_index=False).sum()
+emp2007 = emp2007.rename(columns={'bg2010ge': 'bg2010'})
+
+## Drop weight column
+emp2007 = emp2007.drop(["weight"], axis = 1)
+
 ## Add 1 to every value for ln purposes
-emp2007 += 1
+emp2007[emp_columns] += 1
 
 ## Calculate employment entropy
 emp2007["E"] = ((emp2007["emp_retail"]/emp2007["emp_tot"])*np.log(emp2007["emp_retail"]/emp2007["emp_tot"])) + \
@@ -514,10 +579,10 @@ emp2007["emp_entropy"] = -emp2007["E"]/np.log(5)
 ## Calculate employment and housing entropy
 ## Join with housing info from ACS
 acs2007 = pd.read_csv("../acs_change_file/outputs/acs2007.csv")
-acs2007["bg2000"] = acs2007['bg2000'].astype(str).apply(add_leading_zero)
+acs2007["bg2010"] = acs2007['bg2010'].astype(str).apply(add_leading_zero)
 acs2007["hh"]  = acs2007["area_acres"] * acs2007["hh_den_acre"]
 
-emp_hh2007 = pd.merge(emp2007, acs2007, on = "bg2000", how = "left")
+emp_hh2007 = pd.merge(emp2007, acs2007, on = "bg2010", how = "left")
 
 emp_hh2007["total_activity"] = emp_hh2007["hh"] + emp_hh2007["emp_tot"]
 emp_hh2007["A"] = ((emp_hh2007["hh"] / emp_hh2007["total_activity"])*np.log(emp_hh2007["hh"] /emp_hh2007["total_activity"])) + \
@@ -538,7 +603,7 @@ emp_hh2007["pop"] = emp_hh2007["pop_den_acre"] * emp_hh2007["area_acres"]
 emp_hh2007["emp_pop_den_acre"] = (emp_hh2007["emp_tot"] + emp_hh2007["pop"]) / emp_hh2007["area_acres"]
 
 ## Add year
-lehd2007 = emp_hh2007[["bg2000", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
+lehd2007 = emp_hh2007[["bg2010", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
 print(lehd2007.head())
 print(lehd2007.shape)
 lehd2007.to_csv("./outputs/lehd2007.csv", index = False)
@@ -561,27 +626,36 @@ emp_load = pd.concat(emp_load)
 emp_load2008 = emp_load.reset_index()
 
 ## Calculate employment by industry
-emp_load2008["bg2000"] = emp_load2008["w_geocode"]
+emp_load2008["blk2000"] = emp_load2008["w_geocode"]
 emp_load2008["emp_tot"] = emp_load2008["C000"]
 emp_load2008["emp_retail"] = emp_load2008["CNS07"]
 emp_load2008["emp_office"] = emp_load2008["CNS09"] + emp_load2008["CNS10"] + emp_load2008["CNS11"] + emp_load2008["CNS13"] + emp_load2008["CNS20"]
 emp_load2008["emp_industrial"] =  emp_load2008["CNS01"] + emp_load2008["CNS02"] + emp_load2008["CNS03"] + emp_load2008["CNS04"] + emp_load2008["CNS05"] + emp_load2008["CNS06"] + emp_load2008["CNS08"]
 emp_load2008["emp_service"] = emp_load2008["CNS12"] + emp_load2008["CNS14"] + emp_load2008["CNS15"] + emp_load2008["CNS16"] + emp_load2008["CNS19"]
-emp_load2008["emp_entertain"] =  emp_load2008["CNS17"] + emp_load["CNS18"]																	
+emp_load2008["emp_entertain"] =  emp_load2008["CNS17"] + emp_load2008["CNS18"]																	
 
-## Rename columns
-emp_load2008 = emp_load2008[["bg2000", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
+## Select columns
+emp_load2008 = emp_load2008[["blk2000", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
 
-## Convert bg2000 to string
-emp_load2008['bg2000'] = emp_load2008['bg2000'].astype(str)
-## Remove last three characters
-emp_load2008['bg2000'] = emp_load2008['bg2000'].str[:-3]
-## Add leading zeros
-emp_load2008['bg2000'] = emp_load2008['bg2000'].apply(add_leading_zero)
-## Group by bg2000 and sum emp_tot to get total employment by block group
-emp2008 = emp_load2008.groupby('bg2000').sum()
+## Convert blk2000 to string
+emp_load2008['blk2000'] = emp_load2008['blk2000'].astype(str).apply(add_leading_zero)
+
+## Join on crosswalks and aggregate
+emp2008 = pd.merge(emp_load2008, nhgis_blk2000_bg2010, how='left', left_on = "blk2000", right_on = "blk2000ge")
+emp2008 = emp2008[["bg2010ge", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain", "weight"]]
+## Multiply by weight
+emp_columns = ["emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]
+emp2008[emp_columns].multiply(emp2008["weight"], axis="index")
+
+## And sum within 2010 block groups
+emp2008 = emp2008.groupby("bg2010ge", as_index=False).sum()
+emp2008 = emp2008.rename(columns={'bg2010ge': 'bg2010'})
+
+## Drop weight column
+emp2008 = emp2008.drop(["weight"], axis = 1)
+
 ## Add 1 to every value for ln purposes
-emp2008 += 1
+emp2008[emp_columns] += 1
 
 ## Calculate employment entropy
 emp2008["E"] = ((emp2008["emp_retail"]/emp2008["emp_tot"])*np.log(emp2008["emp_retail"]/emp2008["emp_tot"])) + \
@@ -595,10 +669,10 @@ emp2008["emp_entropy"] = -emp2008["E"]/np.log(5)
 ## Calculate employment and housing entropy
 ## Join with housing info from ACS
 acs2008 = pd.read_csv("../acs_change_file/outputs/acs2008.csv")
-acs2008["bg2000"] = acs2008['bg2000'].astype(str).apply(add_leading_zero)
+acs2008["bg2010"] = acs2008['bg2010'].astype(str).apply(add_leading_zero)
 acs2008["hh"]  = acs2008["area_acres"] * acs2008["hh_den_acre"]
 
-emp_hh2008 = pd.merge(emp2008, acs2008, on = "bg2000", how = "left")
+emp_hh2008 = pd.merge(emp2008, acs2008, on = "bg2010", how = "left")
 
 emp_hh2008["total_activity"] = emp_hh2008["hh"] + emp_hh2008["emp_tot"]
 emp_hh2008["A"] = ((emp_hh2008["hh"] / emp_hh2008["total_activity"])*np.log(emp_hh2008["hh"] /emp_hh2008["total_activity"])) + \
@@ -619,7 +693,7 @@ emp_hh2008["pop"] = emp_hh2008["pop_den_acre"] * emp_hh2008["area_acres"]
 emp_hh2008["emp_pop_den_acre"] = (emp_hh2008["emp_tot"] + emp_hh2008["pop"]) / emp_hh2008["area_acres"]
 
 ## Add year
-lehd2008 = emp_hh2008[["bg2000", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
+lehd2008 = emp_hh2008[["bg2010", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
 print(lehd2008.head())
 print(lehd2008.shape)
 lehd2008.to_csv("./outputs/lehd2008.csv", index = False)
@@ -642,27 +716,36 @@ emp_load = pd.concat(emp_load)
 emp_load2009 = emp_load.reset_index()
 
 ## Calculate employment by industry
-emp_load2009["bg2000"] = emp_load2009["w_geocode"]
+emp_load2009["blk2000"] = emp_load2009["w_geocode"]
 emp_load2009["emp_tot"] = emp_load2009["C000"]
 emp_load2009["emp_retail"] = emp_load2009["CNS07"]
 emp_load2009["emp_office"] = emp_load2009["CNS09"] + emp_load2009["CNS10"] + emp_load2009["CNS11"] + emp_load2009["CNS13"] + emp_load2009["CNS20"]
 emp_load2009["emp_industrial"] =  emp_load2009["CNS01"] + emp_load2009["CNS02"] + emp_load2009["CNS03"] + emp_load2009["CNS04"] + emp_load2009["CNS05"] + emp_load2009["CNS06"] + emp_load2009["CNS08"]
 emp_load2009["emp_service"] = emp_load2009["CNS12"] + emp_load2009["CNS14"] + emp_load2009["CNS15"] + emp_load2009["CNS16"] + emp_load2009["CNS19"]
-emp_load2009["emp_entertain"] =  emp_load2009["CNS17"] + emp_load["CNS18"]																	
+emp_load2009["emp_entertain"] =  emp_load2009["CNS17"] + emp_load2009["CNS18"]																	
 
-## Rename columns
-emp_load2009 = emp_load2009[["bg2000", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
+## Select columns
+emp_load2009 = emp_load2009[["blk2000", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
 
-## Convert bg2000 to string
-emp_load2009['bg2000'] = emp_load2009['bg2000'].astype(str)
-## Remove last three characters
-emp_load2009['bg2000'] = emp_load2009['bg2000'].str[:-3]
-## Add leading zeros
-emp_load2009['bg2000'] = emp_load2009['bg2000'].apply(add_leading_zero)
-## Group by bg2000 and sum emp_tot to get total employment by block group
-emp2009 = emp_load2009.groupby('bg2000').sum()
+## Convert blk2000 to string
+emp_load2009['blk2000'] = emp_load2009['blk2000'].astype(str).apply(add_leading_zero)
+
+## Join on crosswalks and aggregate
+emp2009 = pd.merge(emp_load2009, nhgis_blk2000_bg2010, how='left', left_on = "blk2000", right_on = "blk2000ge")
+emp2009 = emp2009[["bg2010ge", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain", "weight"]]
+## Multiply by weight
+emp_columns = ["emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]
+emp2009[emp_columns].multiply(emp2009["weight"], axis="index")
+
+## And sum within 2010 block groups
+emp2009 = emp2009.groupby("bg2010ge", as_index=False).sum()
+emp2009 = emp2009.rename(columns={'bg2010ge': 'bg2010'})
+
+## Drop weight column
+emp2009 = emp2009.drop(["weight"], axis = 1)
+
 ## Add 1 to every value for ln purposes
-emp2009 += 1
+emp2009[emp_columns] += 1
 
 ## Calculate employment entropy
 emp2009["E"] = ((emp2009["emp_retail"]/emp2009["emp_tot"])*np.log(emp2009["emp_retail"]/emp2009["emp_tot"])) + \
@@ -676,10 +759,10 @@ emp2009["emp_entropy"] = -emp2009["E"]/np.log(5)
 ## Calculate employment and housing entropy
 ## Join with housing info from ACS
 acs2009 = pd.read_csv("../acs_change_file/outputs/acs2009.csv")
-acs2009["bg2000"] = acs2009['bg2000'].astype(str).apply(add_leading_zero)
+acs2009["bg2010"] = acs2009['bg2010'].astype(str).apply(add_leading_zero)
 acs2009["hh"]  = acs2009["area_acres"] * acs2009["hh_den_acre"]
 
-emp_hh2009 = pd.merge(emp2009, acs2009, on = "bg2000", how = "left")
+emp_hh2009 = pd.merge(emp2009, acs2009, on = "bg2010", how = "left")
 
 emp_hh2009["total_activity"] = emp_hh2009["hh"] + emp_hh2009["emp_tot"]
 emp_hh2009["A"] = ((emp_hh2009["hh"] / emp_hh2009["total_activity"])*np.log(emp_hh2009["hh"] /emp_hh2009["total_activity"])) + \
@@ -700,7 +783,7 @@ emp_hh2009["pop"] = emp_hh2009["pop_den_acre"] * emp_hh2009["area_acres"]
 emp_hh2009["emp_pop_den_acre"] = (emp_hh2009["emp_tot"] + emp_hh2009["pop"]) / emp_hh2009["area_acres"]
 
 ## Add year
-lehd2009 = emp_hh2009[["bg2000", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
+lehd2009 = emp_hh2009[["bg2010", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
 print(lehd2009.head())
 print(lehd2009.shape)
 lehd2009.to_csv("./outputs/lehd2009.csv", index = False)
@@ -1515,27 +1598,36 @@ emp_load = pd.concat(emp_load)
 emp_load2020 = emp_load.reset_index()
 
 ## Calculate employment by industry
-emp_load2020["bg2020"] = emp_load2020["w_geocode"]
+emp_load2020["blk2020"] = emp_load2020["w_geocode"]
 emp_load2020["emp_tot"] = emp_load2020["C000"]
 emp_load2020["emp_retail"] = emp_load2020["CNS07"]
 emp_load2020["emp_office"] = emp_load2020["CNS09"] + emp_load2020["CNS10"] + emp_load2020["CNS11"] + emp_load2020["CNS13"] + emp_load2020["CNS20"]
 emp_load2020["emp_industrial"] =  emp_load2020["CNS01"] + emp_load2020["CNS02"] + emp_load2020["CNS03"] + emp_load2020["CNS04"] + emp_load2020["CNS05"] + emp_load2020["CNS06"] + emp_load2020["CNS08"]
 emp_load2020["emp_service"] = emp_load2020["CNS12"] + emp_load2020["CNS14"] + emp_load2020["CNS15"] + emp_load2020["CNS16"] + emp_load2020["CNS19"]
-emp_load2020["emp_entertain"] =  emp_load2020["CNS17"] + emp_load["CNS18"]																	
+emp_load2020["emp_entertain"] =  emp_load2020["CNS17"] + emp_load2020["CNS18"]																	
 
-## Rename columns
-emp_load2020 = emp_load2020[["bg2020", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
+## Select columns
+emp_load2020 = emp_load2020[["blk2020", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
 
-## Convert bg2020 to string
-emp_load2020['bg2020'] = emp_load2020['bg2020'].astype(str)
-## Remove last three characters
-emp_load2020['bg2020'] = emp_load2020['bg2020'].str[:-3]
-## Add leading zeros
-emp_load2020['bg2020'] = emp_load2020['bg2020'].apply(add_leading_zero)
-## Group by bg2020 and sum emp_tot to get total employment by block group
-emp2020 = emp_load2020.groupby('bg2020').sum()
+## Convert blk2020 to string
+emp_load2020['blk2020'] = emp_load2020['blk2020'].astype(str).apply(add_leading_zero)
+
+## Join on crosswalks and aggregate
+emp2020 = pd.merge(emp_load2020, nhgis_blk2020_bg2010, how='left', left_on = "blk2020", right_on = "blk2020ge")
+emp2020 = emp2020[["bg2010ge", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain", "weight"]]
+## Multiply by weight
+emp_columns = ["emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]
+emp2020[emp_columns].multiply(emp2020["weight"], axis="index")
+
+## And sum within 2020 block groups
+emp2020 = emp2020.groupby("bg2010ge", as_index=False).sum()
+emp2020 = emp2020.rename(columns={'bg2010ge': 'bg2010'})
+
+## Drop weight column
+emp2020 = emp2020.drop(["weight"], axis = 1)
+
 ## Add 1 to every value for ln purposes
-emp2020 += 1
+emp2020[emp_columns] += 1
 
 ## Calculate employment entropy
 emp2020["E"] = ((emp2020["emp_retail"]/emp2020["emp_tot"])*np.log(emp2020["emp_retail"]/emp2020["emp_tot"])) + \
@@ -1549,10 +1641,10 @@ emp2020["emp_entropy"] = -emp2020["E"]/np.log(5)
 ## Calculate employment and housing entropy
 ## Join with housing info from ACS
 acs2020 = pd.read_csv("../acs_change_file/outputs/acs2020.csv")
-acs2020["bg2020"] = acs2020['bg2020'].astype(str).apply(add_leading_zero)
+acs2020["bg2010"] = acs2020['bg2010'].astype(str).apply(add_leading_zero)
 acs2020["hh"]  = acs2020["area_acres"] * acs2020["hh_den_acre"]
 
-emp_hh2020 = pd.merge(emp2020, acs2020, on = "bg2020", how = "left")
+emp_hh2020 = pd.merge(emp2020, acs2020, on = "bg2010", how = "left")
 
 emp_hh2020["total_activity"] = emp_hh2020["hh"] + emp_hh2020["emp_tot"]
 emp_hh2020["A"] = ((emp_hh2020["hh"] / emp_hh2020["total_activity"])*np.log(emp_hh2020["hh"] /emp_hh2020["total_activity"])) + \
@@ -1573,7 +1665,7 @@ emp_hh2020["pop"] = emp_hh2020["pop_den_acre"] * emp_hh2020["area_acres"]
 emp_hh2020["emp_pop_den_acre"] = (emp_hh2020["emp_tot"] + emp_hh2020["pop"]) / emp_hh2020["area_acres"]
 
 ## Add year
-lehd2020 = emp_hh2020[["bg2020", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
+lehd2020 = emp_hh2020[["bg2010", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
 print(lehd2020.head())
 print(lehd2020.shape)
 lehd2020.to_csv("./outputs/lehd2020.csv", index = False)
@@ -1596,27 +1688,36 @@ emp_load = pd.concat(emp_load)
 emp_load2021 = emp_load.reset_index()
 
 ## Calculate employment by industry
-emp_load2021["bg2020"] = emp_load2021["w_geocode"]
+emp_load2021["blk2020"] = emp_load2021["w_geocode"]
 emp_load2021["emp_tot"] = emp_load2021["C000"]
 emp_load2021["emp_retail"] = emp_load2021["CNS07"]
 emp_load2021["emp_office"] = emp_load2021["CNS09"] + emp_load2021["CNS10"] + emp_load2021["CNS11"] + emp_load2021["CNS13"] + emp_load2021["CNS20"]
 emp_load2021["emp_industrial"] =  emp_load2021["CNS01"] + emp_load2021["CNS02"] + emp_load2021["CNS03"] + emp_load2021["CNS04"] + emp_load2021["CNS05"] + emp_load2021["CNS06"] + emp_load2021["CNS08"]
 emp_load2021["emp_service"] = emp_load2021["CNS12"] + emp_load2021["CNS14"] + emp_load2021["CNS15"] + emp_load2021["CNS16"] + emp_load2021["CNS19"]
-emp_load2021["emp_entertain"] =  emp_load2021["CNS17"] + emp_load["CNS18"]																	
+emp_load2021["emp_entertain"] =  emp_load2021["CNS17"] + emp_load2021["CNS18"]																	
 
-## Rename columns
-emp_load2021 = emp_load2021[["bg2020", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
+## Select columns
+emp_load2021 = emp_load2021[["blk2020", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
 
-## Convert bg2020 to string
-emp_load2021['bg2020'] = emp_load2021['bg2020'].astype(str)
-## Remove last three characters
-emp_load2021['bg2020'] = emp_load2021['bg2020'].str[:-3]
-## Add leading zeros
-emp_load2021['bg2020'] = emp_load2021['bg2020'].apply(add_leading_zero)
-## Group by bg2020 and sum emp_tot to get total employment by block group
-emp2021 = emp_load2021.groupby('bg2020').sum()
+## Convert blk2020 to string
+emp_load2021['blk2020'] = emp_load2021['blk2020'].astype(str).apply(add_leading_zero)
+
+## Join on crosswalks and aggregate
+emp2021 = pd.merge(emp_load2021, nhgis_blk2020_bg2010, how='left', left_on = "blk2020", right_on = "blk2020ge")
+emp2021 = emp2021[["bg2010ge", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain", "weight"]]
+## Multiply by weight
+emp_columns = ["emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]
+emp2021[emp_columns].multiply(emp2021["weight"], axis="index")
+
+## And sum within 2021 block groups
+emp2021 = emp2021.groupby("bg2010ge", as_index=False).sum()
+emp2021 = emp2021.rename(columns={'bg2010ge': 'bg2010'})
+
+## Drop weight column
+emp2021 = emp2021.drop(["weight"], axis = 1)
+
 ## Add 1 to every value for ln purposes
-emp2021 += 1
+emp2021[emp_columns] += 1
 
 ## Calculate employment entropy
 emp2021["E"] = ((emp2021["emp_retail"]/emp2021["emp_tot"])*np.log(emp2021["emp_retail"]/emp2021["emp_tot"])) + \
@@ -1630,10 +1731,10 @@ emp2021["emp_entropy"] = -emp2021["E"]/np.log(5)
 ## Calculate employment and housing entropy
 ## Join with housing info from ACS
 acs2021 = pd.read_csv("../acs_change_file/outputs/acs2021.csv")
-acs2021["bg2020"] = acs2021['bg2020'].astype(str).apply(add_leading_zero)
+acs2021["bg2010"] = acs2021['bg2010'].astype(str).apply(add_leading_zero)
 acs2021["hh"]  = acs2021["area_acres"] * acs2021["hh_den_acre"]
 
-emp_hh2021 = pd.merge(emp2021, acs2021, on = "bg2020", how = "left")
+emp_hh2021 = pd.merge(emp2021, acs2021, on = "bg2010", how = "left")
 
 emp_hh2021["total_activity"] = emp_hh2021["hh"] + emp_hh2021["emp_tot"]
 emp_hh2021["A"] = ((emp_hh2021["hh"] / emp_hh2021["total_activity"])*np.log(emp_hh2021["hh"] /emp_hh2021["total_activity"])) + \
@@ -1654,7 +1755,7 @@ emp_hh2021["pop"] = emp_hh2021["pop_den_acre"] * emp_hh2021["area_acres"]
 emp_hh2021["emp_pop_den_acre"] = (emp_hh2021["emp_tot"] + emp_hh2021["pop"]) / emp_hh2021["area_acres"]
 
 ## Add year
-lehd2021 = emp_hh2021[["bg2020", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
+lehd2021 = emp_hh2021[["bg2010", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
 print(lehd2021.head())
 print(lehd2021.shape)
 lehd2021.to_csv("./outputs/lehd2021.csv", index = False)
@@ -1677,27 +1778,36 @@ emp_load = pd.concat(emp_load)
 emp_load2022 = emp_load.reset_index()
 
 ## Calculate employment by industry
-emp_load2022["bg2020"] = emp_load2022["w_geocode"]
+emp_load2022["blk2020"] = emp_load2022["w_geocode"]
 emp_load2022["emp_tot"] = emp_load2022["C000"]
 emp_load2022["emp_retail"] = emp_load2022["CNS07"]
 emp_load2022["emp_office"] = emp_load2022["CNS09"] + emp_load2022["CNS10"] + emp_load2022["CNS11"] + emp_load2022["CNS13"] + emp_load2022["CNS20"]
 emp_load2022["emp_industrial"] =  emp_load2022["CNS01"] + emp_load2022["CNS02"] + emp_load2022["CNS03"] + emp_load2022["CNS04"] + emp_load2022["CNS05"] + emp_load2022["CNS06"] + emp_load2022["CNS08"]
 emp_load2022["emp_service"] = emp_load2022["CNS12"] + emp_load2022["CNS14"] + emp_load2022["CNS15"] + emp_load2022["CNS16"] + emp_load2022["CNS19"]
-emp_load2022["emp_entertain"] =  emp_load2022["CNS17"] + emp_load["CNS18"]																	
+emp_load2022["emp_entertain"] =  emp_load2022["CNS17"] + emp_load2022["CNS18"]																	
 
-## Rename columns
-emp_load2022 = emp_load2022[["bg2020", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
+## Select columns
+emp_load2022 = emp_load2022[["blk2020", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]]
 
-## Convert bg2020 to string
-emp_load2022['bg2020'] = emp_load2022['bg2020'].astype(str)
-## Remove last three characters
-emp_load2022['bg2020'] = emp_load2022['bg2020'].str[:-3]
-## Add leading zeros
-emp_load2022['bg2020'] = emp_load2022['bg2020'].apply(add_leading_zero)
-## Group by bg2020 and sum emp_tot to get total employment by block group
-emp2022 = emp_load2022.groupby('bg2020').sum()
+## Convert blk2020 to string
+emp_load2022['blk2020'] = emp_load2022['blk2020'].astype(str).apply(add_leading_zero)
+
+## Join on crosswalks and aggregate
+emp2022 = pd.merge(emp_load2022, nhgis_blk2020_bg2010, how='left', left_on = "blk2020", right_on = "blk2020ge")
+emp2022 = emp2022[["bg2010ge", "emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain", "weight"]]
+## Multiply by weight
+emp_columns = ["emp_tot", "emp_retail", "emp_office", "emp_industrial", "emp_service", "emp_entertain"]
+emp2022[emp_columns].multiply(emp2022["weight"], axis="index")
+
+## And sum within 2022 block groups
+emp2022 = emp2022.groupby("bg2010ge", as_index=False).sum()
+emp2022 = emp2022.rename(columns={'bg2010ge': 'bg2010'})
+
+## Drop weight column
+emp2022 = emp2022.drop(["weight"], axis = 1)
+
 ## Add 1 to every value for ln purposes
-emp2022 += 1
+emp2022[emp_columns] += 1
 
 ## Calculate employment entropy
 emp2022["E"] = ((emp2022["emp_retail"]/emp2022["emp_tot"])*np.log(emp2022["emp_retail"]/emp2022["emp_tot"])) + \
@@ -1711,10 +1821,10 @@ emp2022["emp_entropy"] = -emp2022["E"]/np.log(5)
 ## Calculate employment and housing entropy
 ## Join with housing info from ACS
 acs2022 = pd.read_csv("../acs_change_file/outputs/acs2022.csv")
-acs2022["bg2020"] = acs2022['bg2020'].astype(str).apply(add_leading_zero)
+acs2022["bg2010"] = acs2022['bg2010'].astype(str).apply(add_leading_zero)
 acs2022["hh"]  = acs2022["area_acres"] * acs2022["hh_den_acre"]
 
-emp_hh2022 = pd.merge(emp2022, acs2022, on = "bg2020", how = "left")
+emp_hh2022 = pd.merge(emp2022, acs2022, on = "bg2010", how = "left")
 
 emp_hh2022["total_activity"] = emp_hh2022["hh"] + emp_hh2022["emp_tot"]
 emp_hh2022["A"] = ((emp_hh2022["hh"] / emp_hh2022["total_activity"])*np.log(emp_hh2022["hh"] /emp_hh2022["total_activity"])) + \
@@ -1735,7 +1845,7 @@ emp_hh2022["pop"] = emp_hh2022["pop_den_acre"] * emp_hh2022["area_acres"]
 emp_hh2022["emp_pop_den_acre"] = (emp_hh2022["emp_tot"] + emp_hh2022["pop"]) / emp_hh2022["area_acres"]
 
 ## Add year
-lehd2022 = emp_hh2022[["bg2020", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
+lehd2022 = emp_hh2022[["bg2010", "emp_den_acre", "emp_entropy", "emp_hh_entropy", "emp_hh_den_acre", "emp_pop_den_acre", "year"]]
 print(lehd2022.head())
 print(lehd2022.shape)
 lehd2022.to_csv("./outputs/lehd2022.csv", index = False)
