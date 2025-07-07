@@ -15,6 +15,18 @@ library(tidyverse)
 library(data.table)
 library(sf)
 
+
+# Read in Crosswalk -------------------------------------------------------
+nhgis_2020bg_2010bg <- read.csv("./nhgis_bg2020_bg2010.csv")
+nhgis_2020bg_2010bg$bg2020ge <- as.character(nhgis_2020bg_2010bg$bg2020ge)
+nhgis_2020bg_2010bg$bg2020ge <- ifelse(nchar(nhgis_2020bg_2010bg$bg2020ge) == 11, paste0("0", nhgis_2020bg_2010bg$bg2020ge),
+                                       nhgis_2020bg_2010bg$bg2020ge)
+nhgis_2020bg_2010bg$bg2010ge <- as.character(nhgis_2020bg_2010bg$bg2010ge)
+nhgis_2020bg_2010bg$bg2010ge <- ifelse(nchar(nhgis_2020bg_2010bg$bg2010ge) == 11, paste0("0", nhgis_2020bg_2010bg$bg2010ge),
+                                       nhgis_2020bg_2010bg$bg2010ge)
+nhgis_2020bg_2010bg <- nhgis_2020bg_2010bg %>%
+  select(-bg2020gj, -bg2010gj)
+
 # Transit ----------------------------------------------------------------
 ## 2014-2017 -------------------------------------------------------------
 transit_years_csv <- c(2014, 2015, 2016, 2017)
@@ -125,11 +137,11 @@ write.csv(transit_dfs_2021, paste0("./outputs/transit2021.csv"), row.names = F)
 
 
 ## 2022 ----------------------------------------------------------------------
-transit_dfs_2022 <- list()
+transit_dfs_2022_load <- list()
 keep_files <- list.files(path=paste0("./inputs/transit2022"), pattern=paste0('*block_group_2022.csv'))
 print(keep_files)
-transit_dfs_2022 <- do.call(rbind,lapply(paste0(getwd(), "/inputs/transit2022", '/', keep_files), fread))
-transit_dfs_2022 <- transit_dfs_2022 %>%
+transit_dfs_2022_load <- do.call(rbind,lapply(paste0(getwd(), "/inputs/transit2022", '/', keep_files), fread))
+transit_dfs_2022_load <- transit_dfs_2022_load %>%
   select(`Census ID`, Threshold, Weighted_average_total_jobs, Year) %>%
   filter(Threshold == 30) %>%
   rename(jobs = Weighted_average_total_jobs,
@@ -137,6 +149,18 @@ transit_dfs_2022 <- transit_dfs_2022 %>%
          year = Year,
          threshold = Threshold) %>%
   select(bg2020, threshold, jobs, year)
+transit_dfs_2022_load$bg2020 <- as.character(transit_dfs_2022_load$bg2020)
+transit_dfs_2022_load$bg2020 <- ifelse(nchar(transit_dfs_2022_load$bg2020) == 11, paste0("0", transit_dfs_2022_load$bg2020),
+                                  transit_dfs_2022_load$bg2020)
+
+## Crosswalk to 2010 BGs
+transit_dfs_2022 <- transit_dfs_2022_load %>%
+  left_join(nhgis_2020bg_2010bg, by = c("bg2020"="bg2020ge")) %>%
+  mutate(jobs = jobs * wt_pop) %>%
+  group_by(bg2010ge, threshold, year) %>%
+  summarize(jobs = sum(jobs, na.rm = FALSE)) %>%
+  rename(bg2010 = bg2010ge)
+
 write.csv(transit_dfs_2022, paste0("./outputs/transit2022.csv"), row.names = F)
 
 
@@ -165,13 +189,22 @@ for(j in walk_unzip) {
 }
 
 walk2022_files <- paste0(getwd(), "/inputs/walk2022/", list.files(path = "./inputs/walk2022", pattern = "*block_group_2022.csv"))
-walk2022 <- do.call(rbind, lapply(walk2022_files, fread))
-walk2022 <- walk2022 %>%
+walk2022_load <- do.call(rbind, lapply(walk2022_files, fread))
+walk2022_load <- walk2022_load %>%
   rename(bg2020 = `Census ID`, jobs = Weighted_average_total_jobs, year = Year, threshold = Threshold) %>%
   select(bg2020, threshold, jobs, year) %>%
   filter(threshold == 30) %>%
   mutate(bg2020 = as.character(bg2020),
          bg2020 = ifelse(nchar(bg2020) == 11, paste0("0", bg2020), bg2020))
+
+walk2022 <- walk2022_load %>%
+  left_join(nhgis_2020bg_2010bg, by = c("bg2020" = "bg2020ge")) %>%
+  mutate(jobs = jobs * wt_pop) %>%
+  group_by(bg2010ge, threshold, year) %>%
+  summarize(jobs = sum(jobs, na.rm = FALSE)) %>%
+  rename(bg2010 = bg2010ge)
+
+  
 write.csv(walk2022, "./outputs/walk2022.csv", row.names = F)
 
 # Bike --------------------------------------------------------------------
@@ -255,14 +288,22 @@ for(j in bike_unzip) {
 
 keep_files <- list.files(path="./inputs/bike2022", pattern = '*block_group_2022.csv')
 print(keep_files) 
-bike2022 <- do.call(rbind, lapply(paste0(getwd(), "/inputs/bike2022/", keep_files), fread))
-bike2022 <- bike2022 %>%
+bike2022_load <- do.call(rbind, lapply(paste0(getwd(), "/inputs/bike2022/", keep_files), fread))
+bike2022_load <- bike2022_load %>%
   select(`Census ID`, Threshold, Weighted_average_total_jobs, Year) %>%
   rename(bg2020 = `Census ID`, threshold = Threshold, 
          jobs = Weighted_average_total_jobs, year = Year) %>%
   filter(threshold == 30) %>%
   mutate(bg2020 = as.character(bg2020),
          bg2020 = ifelse(nchar(bg2020) == 11, paste0("0", bg2020), bg2020))
+
+bike2022 <- bike2022_load %>% 
+  left_join(nhgis_2020bg_2010bg, by = c("bg2020" = "bg2020ge")) %>%
+  mutate(jobs = jobs * wt_pop) %>%
+  group_by(bg2010ge, threshold, year) %>%
+  summarize(jobs = sum(jobs, na.rm = FALSE)) %>%
+  rename(bg2010 = bg2010ge)
+  
 
 write.csv(bike2022, "./outputs/bike2022.csv", row.names = F)
 
@@ -336,15 +377,23 @@ for(j in auto_unzip) {
 
 keep_files <- list.files(path="./inputs/auto2022", pattern = '*block_group_2022.csv')
 print(keep_files) 
-auto2022 <- do.call(rbind, lapply(paste0(getwd(), "/inputs/auto2022/", keep_files), fread))
-auto2022$geoid = as.character(auto2022$`Census ID`)
-auto2022 <- auto2022 %>%
+auto2022_load <- do.call(rbind, lapply(paste0(getwd(), "/inputs/auto2022/", keep_files), fread))
+auto2022_load$geoid = as.character(auto2022_load$`Census ID`)
+auto2022_load <- auto2022_load %>%
   rename(jobs = Weighted_average_total_jobs,
          year = Year,
          threshold = Threshold) %>%
   mutate(bg2020 = ifelse(nchar(geoid) == 11, paste0("0", geoid), geoid)) %>%
   filter(threshold == 30) %>%
   select(bg2020, threshold, jobs, year)
+
+auto2022 <- auto2022_load %>% 
+  left_join(nhgis_2020bg_2010bg, by = c("bg2020" = "bg2020ge")) %>%
+  mutate(jobs = jobs * wt_pop) %>%
+  group_by(bg2010ge, threshold, year) %>%
+  summarize(jobs = sum(jobs, na.rm = FALSE)) %>%
+  rename(bg2010 = bg2010ge)
+
 write.csv(auto2022, "./outputs/auto2022.csv", row.names = F)
 
 # Make Sure Files are Consistent ------------------------------------------

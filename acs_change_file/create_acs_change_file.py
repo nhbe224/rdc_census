@@ -2203,6 +2203,131 @@ median_inc2022['year'] = 2022
 print(median_inc2022.head())
 print(median_inc2022.shape)
 
+
+### Examine Median Income
+median_inc_all = pd.DataFrame(pd.concat([median_inc2000to2010, median_inc2011, median_inc2012,
+median_inc2013, median_inc2014, median_inc2015, median_inc2016, median_inc2017, median_inc2018,
+median_inc2019, median_inc2020, median_inc2021, median_inc2022]))
+
+# Replace NA with 0
+median_inc_all[median_inc_all[["median_income_2022dollars", "median_income"]] < 0] = np.nan
+
+# Sort the DataFrame by 'id' and 'year'
+median_inc_all = median_inc_all.sort_values(by=['bg2010', 'year'])
+
+# Find the bgs with NaN
+median_inc_all_nan = median_inc_all[median_inc_all['median_income'].isna()]
+bg_nan = median_inc_all_nan['bg2010'].unique()
+median_inc_all_nan = median_inc_all[median_inc_all['bg2010'].isin(bg_nan)]
+# Interpolate
+median_inc_interpolated = median_inc_all_nan.groupby('bg2010').apply(lambda group: group.interpolate())
+median_inc_interpolated = median_inc_interpolated.reset_index(drop = True)
+
+# Find the bgs with no NaN
+median_inc_all_no_nan = ~median_inc_all['bg2010'].isin(bg_nan)
+median_inc_all_no_nan = median_inc_all[median_inc_all_no_nan]
+
+# Stack them together
+median_inc_all_final = pd.concat([median_inc_interpolated, median_inc_all_no_nan])
+median_inc_all_final = median_inc_all_final.sort_values(by=['bg2010', 'year'])
+
+median_inc_all_ex = median_inc_all_final[median_inc_all_final['bg2010'] == random.choice(bg_nan)]
+print(median_inc_all_ex)
+
+# Now break out by year
+median_inc2000 = median_inc_all_final[median_inc_all_final["year"] == 2000]
+print(median_inc2000.head())
+print(median_inc2000.shape)
+
+median_inc2001 = median_inc_all_final[median_inc_all_final["year"] == 2001]
+print(median_inc2001.head())
+print(median_inc2001.shape)
+
+median_inc2002 = median_inc_all_final[median_inc_all_final["year"] == 2002]
+print(median_inc2002.head())
+print(median_inc2002.shape)
+
+median_inc2003 = median_inc_all_final[median_inc_all_final["year"] == 2003]
+print(median_inc2003.head())
+print(median_inc2003.shape)
+
+median_inc2004 = median_inc_all_final[median_inc_all_final["year"] == 2004]
+print(median_inc2004.head())
+print(median_inc2004.shape)
+
+median_inc2005 = median_inc_all_final[median_inc_all_final["year"] == 2005]
+print(median_inc2005.head())
+print(median_inc2005.shape)
+
+median_inc2006 = median_inc_all_final[median_inc_all_final["year"] == 2006]
+print(median_inc2006.head())
+print(median_inc2006.shape)
+
+median_inc2007 = median_inc_all_final[median_inc_all_final["year"] == 2007]
+print(median_inc2007.head())
+print(median_inc2007.shape)
+
+median_inc2008 = median_inc_all_final[median_inc_all_final["year"] == 2008]
+print(median_inc2008.head())
+print(median_inc2008.shape)
+
+median_inc2009 = median_inc_all_final[median_inc_all_final["year"] == 2009]
+print(median_inc2009.head())
+print(median_inc2009.shape)
+
+median_inc2010 = median_inc_all_final[median_inc_all_final["year"] == 2010]
+print(median_inc2010.head())
+print(median_inc2010.shape)
+
+median_inc2011 = median_inc_all_final[median_inc_all_final["year"] == 2011]
+print(median_inc2011.head())
+print(median_inc2011.shape)
+
+median_inc2012 = median_inc_all_final[median_inc_all_final["year"] == 2012]
+print(median_inc2012.head())
+print(median_inc2012.shape)
+
+median_inc2013 = median_inc_all_final[median_inc_all_final["year"] == 2013]
+print(median_inc2013.head())
+print(median_inc2013.shape)
+
+median_inc2014 = median_inc_all_final[median_inc_all_final["year"] == 2014]
+print(median_inc2014.head())
+print(median_inc2014.shape)
+
+median_inc2015 = median_inc_all_final[median_inc_all_final["year"] == 2015]
+print(median_inc2015.head())
+print(median_inc2015.shape)
+
+median_inc2016 = median_inc_all_final[median_inc_all_final["year"] == 2016]
+print(median_inc2016.head())
+print(median_inc2016.shape)
+
+median_inc2017 = median_inc_all_final[median_inc_all_final["year"] == 2017]
+print(median_inc2017.head())
+print(median_inc2017.shape)
+
+median_inc2018 = median_inc_all_final[median_inc_all_final["year"] == 2018]
+print(median_inc2018.head())
+print(median_inc2018.shape)
+
+median_inc2019 = median_inc_all_final[median_inc_all_final["year"] == 2019]
+print(median_inc2019.head())
+print(median_inc2019.shape)
+
+median_inc2020 = median_inc_all_final[median_inc_all_final["year"] == 2020]
+print(median_inc2020.head())
+print(median_inc2020.shape)
+
+median_inc2021 = median_inc_all_final[median_inc_all_final["year"] == 2021]
+print(median_inc2021.head())
+print(median_inc2021.shape)
+
+median_inc2022 = median_inc_all_final[median_inc_all_final["year"] == 2022]
+print(median_inc2022.head())
+print(median_inc2022.shape)
+
+
 print("Done getting median income in each Census block group...")
 print("Now combining it all together...")
 # Combine Data Together
@@ -2599,26 +2724,3 @@ print(acs2022.shape)
 acs2022.to_csv("./outputs/acs2022.csv", index = False)
 
 print("All done, check outputs for files...")
-
-### Examine Median Income
-median_inc_all = pd.DataFrame(pd.concat([median_inc2000to2010, median_inc2011, median_inc2012,
-median_inc2013, median_inc2014, median_inc2015, median_inc2016, median_inc2017, median_inc2018,
-median_inc2019, median_inc2020, median_inc2021, median_inc2022]))
-
-bg_list = median_inc_all['bg2010'].unique()
-random_bg = random.choice(bg_list)
-print(random_bg)
-
-print(median_inc_all[median_inc_all['bg2010'] == random_bg])
-
-
-value_counts_gt1 = median_inc2000['bg2010ge'].value_counts()
-value_counts_gt1 = value_counts_gt1[value_counts_gt1  > 1].index.tolist()
-appears_more_than_once = median_inc2000[median_inc2000['bg2010ge'].isin(value_counts_gt1)]
-
-value_counts = median_inc2000['bg2010ge'].value_counts()
-value_counts = value_counts[value_counts == 1].index.tolist()
-appears_once = median_inc2000[median_inc2000['bg2010ge'].isin(value_counts)]
-# appears_once_wt_0 = appears_once[appears_once['wt_hh'] == 0]
-# median_inc2000[median_inc2000['GISJOIN'] == "G04001309056112000522736R2"]
-# repeated_gisjoin = median_inc2000[median_inc2000['GISJOIN'] == "G04001309056112000522736R2"][["GISJOIN", "bg2010ge", "HF6001", "wt_hh"]]
