@@ -21,12 +21,8 @@ head(acs_files)
 summary(acs_files$hh_den_acre)
 summary(acs_files$pop_den_acre)
 summary(acs_files$median_income_2022dollars)
+summary(acs_files$median_income)
 summary(acs_files$pct_minority)
-
-acs_files$median_income_2022dollars <- ifelse(acs_files$median_income_2022dollars < 0, NA, acs_files$median_income_2022dollars)
-acs_files$median_income <- ifelse(acs_files$median_income < 0, NA, acs_files$median_income)
-acs_files <- acs_files %>%
-  filter(area_sqmi > 0)
 
 
 # Get random sample of block groups ---------------------------------------

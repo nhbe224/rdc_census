@@ -14,6 +14,7 @@ setwd("D:/neeco/rdc_census/aaa_change_file/")
 library(tidyverse)
 library(data.table)
 library(sf)
+options(scipen = 99999)
 
 
 # Read in Crosswalk -------------------------------------------------------
@@ -133,6 +134,9 @@ transit_dfs_2021 <- transit_dfs_2021 %>%
   filter(threshold == 1800) %>%
   rename(jobs = weighted_average, bg2010 = geoid) %>%
   mutate(threshold = threshold / 60)
+transit_dfs_2021$bg2010 <- as.character(transit_dfs_2021$bg2010)
+transit_dfs_2021$bg2010 <- ifelse(nchar(transit_dfs_2021$bg2010) == 11, paste0("0", transit_dfs_2021$bg2010),
+                                       transit_dfs_2021$bg2010)
 write.csv(transit_dfs_2021, paste0("./outputs/transit2021.csv"), row.names = F)
 
 
@@ -365,7 +369,9 @@ auto2021 <- auto2021 %>%
   filter(threshold == 30) %>%
   select(bg2010, threshold, jobs, year) 
 
-write.csv(auto2021, "./outputs/auto2021.csv", row.names = F)
+## Examine BGs ending in 0000000
+auto2021_examine <- auto2021 %>%
+  filter(str_sub(bg2010, start = -7) == "0000000")
 
 ## 2022 -------------------------------------------------------------------
 auto_unzip <- list.files(path ="./inputs/auto2022/", pattern=".zip$")

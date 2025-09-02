@@ -605,6 +605,45 @@ print(pop2022.head())
 print(pop2022.shape)
 print("Population after crosswalk:", round(pop2022['population'].sum()))
 
+# 2023
+pop_by_state = []
+for i in fips_list:
+    pop_by_state.append(pd.DataFrame(c.acs5.state_county_blockgroup(
+        ('NAME', 'B01003_001E'), state_fips=i, county_fips='*', blockgroup='*', year=2023)))
+
+pop2023_load = pd.concat(pop_by_state, ignore_index=True)
+
+# Create bg2020 column
+pop2023_load["bg2020"] = pop2023_load["state"] + pop2023_load["county"] + \
+    pop2023_load["tract"] + pop2023_load["block group"]
+# Rename population column
+pop2023_load = pop2023_load.rename(columns={'B01003_001E': 'pop2023_bg20'})
+# Keep relevant columns
+pop2023_load = pop2023_load.loc[:, ["state", "bg2020", "pop2023_bg20"]]
+pop2023_ct = pop2023_load[pop2023_load['state']== "09"]
+pop2023_no_ct = pop2023_load[pop2023_load['state'] != "09"]
+
+pop2023_ct.columns = ['state', 'bg2023', 'pop2023_bg20']
+pop2023_ct = pd.merge(pop2023_ct, ct_xwalk2022, how = "left", left_on = "bg2023", right_on = "bg2022_ct")
+pop2023_ct = pop2023_ct[["state", "bg2020", "pop2023_bg20"]]
+
+pop2023 = pd.concat([pop2023_ct, pop2023_no_ct])
+
+# Join with crosswalk 
+print("Population before crosswalk:", pop2023['pop2023_bg20'].sum())
+pop2023 = pd.merge(pop2023, nhgis_bg2020_bg2010, how = 'left', left_on = 'bg2020', right_on = 'bg2020ge')
+pop2023['population'] = pop2023['pop2023_bg20'] * pop2023['wt_pop']
+pop2023 = pop2023[["bg2010ge", "population"]]
+
+pop2023  = pop2023.groupby('bg2010ge', as_index=False).sum()
+pop2023.columns = ['bg2010', 'population']
+# Add year column
+pop2023["year"] = 2023
+
+print(pop2023.head())
+print(pop2023.shape)
+print("Population after crosswalk:", round(pop2023['population'].sum()))
+
 print("Done getting total population by Census block group...")
 print("Now getting non-Hispanic white population by Census block group...")
 
@@ -1057,6 +1096,44 @@ print(pop_nhwhite2022.head())
 print(pop_nhwhite2022.shape)
 print("Non-Hispanic white population after crosswalk:", round(pop_nhwhite2022['pop_nhwhite'].sum()))
 
+# 2023
+pop_nhwhite_by_state = []
+for i in fips_list:
+    pop_nhwhite_by_state.append(pd.DataFrame(c.acs5.state_county_blockgroup(
+        ('NAME', 'B03002_003E'), state_fips=i, county_fips='*', blockgroup='*', year=2023)))
+
+pop_nhwhite2023_load = pd.concat(pop_nhwhite_by_state, ignore_index=True)
+
+# Create bg2020 column
+pop_nhwhite2023_load["bg2020"] = pop_nhwhite2023_load["state"] + pop_nhwhite2023_load["county"] + \
+    pop_nhwhite2023_load["tract"] + pop_nhwhite2023_load["block group"]
+# Rename pop_nhwhite column
+pop_nhwhite2023_load = pop_nhwhite2023_load.rename(columns={'B03002_003E': 'pop2023nhwhite_bg20'})
+
+pop_nhwhite2023_ct = pop_nhwhite2023_load[["state", "bg2020", "pop2023nhwhite_bg20"]][pop_nhwhite2023_load['state'] == "09"]
+pop_nhwhite2023_no_ct = pop_nhwhite2023_load[["state", "bg2020", "pop2023nhwhite_bg20"]][pop_nhwhite2023_load['state'] != "09"]
+
+pop_nhwhite2023_ct.columns = ["state", "bg2023", "pop2023_nhwhite_bg20"]
+pop_nhwhite2023_ct = pd.merge(pop_nhwhite2023_ct, ct_xwalk2022, how = "left", left_on = "bg2023", right_on = "bg2022_ct")
+pop_nhwhite2023_ct = pop_nhwhite2023_ct[["state", "bg2020", "pop2023_nhwhite_bg20"]]
+
+pop_nhwhite2023 = pd.concat([pop_nhwhite2023_no_ct, pop_nhwhite2023_ct])
+# Join with crosswalk 
+print("Non-Hispanic white population before crosswalk:", pop_nhwhite2023['pop2023nhwhite_bg20'].sum())
+pop_nhwhite2023  = pd.merge(pop_nhwhite2023, nhgis_bg2020_bg2010, how = 'left', left_on = 'bg2020', right_on = 'bg2020ge')
+pop_nhwhite2023['pop_nhwhite'] = pop_nhwhite2023['pop2023nhwhite_bg20'] * pop_nhwhite2023 ['wt_pop']
+pop_nhwhite2023 = pop_nhwhite2023[["bg2010ge", "pop_nhwhite"]]
+
+pop_nhwhite2023 = pop_nhwhite2023.groupby('bg2010ge', as_index=False).sum()
+pop_nhwhite2023.columns = ['bg2010', 'pop_nhwhite']
+
+# Add year column
+pop_nhwhite2023["year"] = 2023
+# Keep relevant columns
+pop_nhwhite2023 = pop_nhwhite2023.loc[:, ["bg2010", "pop_nhwhite", "year"]]
+print(pop_nhwhite2023.head())
+print(pop_nhwhite2023.shape)
+print("Non-Hispanic white population after crosswalk:", round(pop_nhwhite2023['pop_nhwhite'].sum()))
 
 # Get land area for each Census block group
 print("Done getting non-Hispanic white population in each Census block group...")
@@ -1516,6 +1593,45 @@ hh2022["year"] = 2022
 print(hh2022.head())
 print(hh2022.shape)
 print("Households after crosswalk:", round(hh2022["households"].sum()))
+
+# 2023
+hh_by_state = []
+for i in fips_list:
+    hh_by_state.append(pd.DataFrame(c.acs5.state_county_blockgroup(
+        ('NAME', 'B11001_001E'), state_fips=i, county_fips='*', blockgroup='*', year=2023)))
+
+hh2023_load = pd.concat(hh_by_state, ignore_index=True)
+
+# Create bg2020 column
+hh2023_load["bg2020"] = hh2023_load["state"] + hh2023_load["county"] + \
+    hh2023_load["tract"] + hh2023_load["block group"]
+# Rename households column
+hh2023_load = hh2023_load.rename(columns={'B11001_001E': 'hh2023_bg20'})
+# Keep relevant columns
+hh2023_load = hh2023_load.loc[:, ["state", "bg2020", "hh2023_bg20"]]
+hh2023_ct = hh2023_load[hh2023_load['state'] == "09"]
+hh2023_no_ct = hh2023_load[hh2023_load['state'] != "09"]
+
+hh2023_ct.columns = ['state', 'bg2023', 'hh2023_bg20']
+hh2023_ct = pd.merge(hh2023_ct, ct_xwalk2022, how = "left", left_on = "bg2023", right_on = "bg2022_ct")
+hh2023_ct = hh2023_ct[["state", "bg2020", "hh2023_bg20"]]
+
+hh2023_load = pd.concat([hh2023_no_ct, hh2023_ct])
+
+# Join with crosswalk 
+print("Households before crosswalk:", round(hh2023_load["hh2023_bg20"].sum()))
+hh2023 = pd.merge(hh2023_load, nhgis_bg2020_bg2010, how = 'left', left_on = 'bg2020', right_on = 'bg2020ge')
+hh2023['households'] = hh2023['hh2023_bg20'] * hh2023['wt_hh']
+hh2023 = hh2023[["bg2010ge", "households"]]
+hh2023 = hh2023.groupby('bg2010ge', as_index=False).sum()
+hh2023.columns = ['bg2010', 'households']
+
+# Add year column
+hh2023["year"] = 2023
+
+print(hh2023.head())
+print(hh2023.shape)
+print("Households after crosswalk:", round(hh2023["households"].sum()))
 
 
 print("Done getting number of households for each Census block group...")
@@ -2203,11 +2319,85 @@ median_inc2022['year'] = 2022
 print(median_inc2022.head())
 print(median_inc2022.shape)
 
+# 2023
+if need_to_pull:
+    extract = AggregateDataExtract(
+    collection="nhgis",
+    datasets=[
+        Dataset(name="2019_2023_ACS5a", data_tables=["B19013"], geog_levels=["blck_grp"])
+        ]
+    )
+    ipums.submit_extract(extract)
+    ipums.wait_for_extract(extract)
+    ipums.download_extract(extract, download_dir=DOWNLOAD_DIR)
+
+    list_of_files = glob.glob(intermediate_dir + "*")
+    latest_file = max(list_of_files, key=os.path.getctime)
+    latest_file_no_zip = latest_file[:-4]
+
+    with zipfile.ZipFile(latest_file, 'r') as zip_ref:
+        zip_ref.extractall(intermediate_dir)
+
+    os.rename(latest_file_no_zip, intermediate_dir + "median_inc2023")
+    csv_file = glob.glob(intermediate_dir + "median_inc2023/" "*.csv")
+    os.rename(csv_file[0], intermediate_dir + "median_inc2023/median_inc2023_load.csv")
+else:
+    pass
+
+median_inc2023_load = pd.read_csv(intermediate_dir + "median_inc2023/median_inc2023_load.csv")
+median_inc2023 = median_inc2023_load[median_inc2023_load['STUSAB'].isin(states_list)]
+
+median_inc2023_ct = median_inc2023[median_inc2023['STUSAB'] == 'CT']
+median_inc2023_ct['bg2023'] = median_inc2023_ct['TL_GEO_ID'].astype(str).apply(add_leading_zero)
+median_inc2023_ct = pd.merge(median_inc2023_ct, ct_xwalk2022, how = "left", left_on = "bg2023", right_on = "bg2022_ct")
+median_inc2023_ct = median_inc2023_ct.drop(['bg2023', 'bg2022_ct'], axis = 1)
+
+median_inc2023_no_ct = median_inc2023[median_inc2023['STUSAB'] != 'CT']
+median_inc2023_no_ct['bg2020'] = median_inc2023_no_ct['TL_GEO_ID'].astype(str).apply(add_leading_zero)
+
+median_inc2023_load = pd.concat([median_inc2023_no_ct, median_inc2023_ct])
+
+## Join on crosswalk 
+median_inc2023 = pd.merge(median_inc2023_load, nhgis_bg2020_bg2010, how='left', left_on='bg2020', right_on='bg2020ge')
+median_inc2023 = pd.merge(median_inc2023, hh2023_load, how='left', left_on='bg2020', right_on='bg2020')
+
+## Convert bg2010ge to string
+median_inc2023['bg2010ge'] = median_inc2023['bg2010ge'].astype(str).apply(add_leading_zero)
+median_inc2023 = median_inc2023[['bg2010ge', 'ASQPE001', 'wt_hh', 'hh2023_bg20']]
+median_inc2023['households'] = median_inc2023['hh2023_bg20'] * median_inc2023['wt_hh']
+median_inc2023 = median_inc2023[['bg2010ge', 'ASQPE001', 'households']]
+median_inc2023.columns = ['bg2010', 'median_income', 'households']
+
+median_inc2023 = median_inc2023.groupby('bg2010').apply(lambda group: 
+    # Check if bg2010 is unique within the group.
+    group['median_income'].iloc[0] if len(group['bg2010']) == 1 
+    # If not unique, calculate the weighted average.
+    else weighted_average_hh(group)
+)
+
+median_inc2023 = pd.DataFrame(median_inc2023).reset_index()
+median_inc2023.columns = ['bg2010', 'median_income']
+
+median_inc2023 = median_inc2023[["bg2010", "median_income"]]
+median_inc2023['median_income_2023dollars'] = median_inc2023["median_income"]
+
+median_inc2023['year'] = 2023
+
+# Adjust to 2022 Dollars
+# CPI: 2022 Income = 2023 Income * (2022 CPI / 2023 CPI), Apr 2022 CPI: 288.582, Apr 2023 CPI: 302.858
+median_inc2023["median_income_2022dollars"] = median_inc2023["median_income"] * \
+	(288.582 / 302.858)
+# Keep relevant columns
+median_inc2023 = median_inc2023.loc[:, [
+	"bg2010", "median_income", "median_income_2022dollars", "year"]]
+print(median_inc2023.head())
+print(median_inc2023.shape)
+
 
 ### Examine Median Income
 median_inc_all = pd.DataFrame(pd.concat([median_inc2000to2010, median_inc2011, median_inc2012,
 median_inc2013, median_inc2014, median_inc2015, median_inc2016, median_inc2017, median_inc2018,
-median_inc2019, median_inc2020, median_inc2021, median_inc2022]))
+median_inc2019, median_inc2020, median_inc2021, median_inc2022, median_inc2023]))
 
 # Replace NA with 0
 median_inc_all[median_inc_all[["median_income_2022dollars", "median_income"]] < 0] = np.nan
@@ -2327,6 +2517,9 @@ median_inc2022 = median_inc_all_final[median_inc_all_final["year"] == 2022]
 print(median_inc2022.head())
 print(median_inc2022.shape)
 
+median_inc2023 = median_inc_all_final[median_inc_all_final["year"] == 2023]
+print(median_inc2023.head())
+print(median_inc2023.shape)
 
 print("Done getting median income in each Census block group...")
 print("Now combining it all together...")
@@ -2723,4 +2916,23 @@ print(acs2022.head())
 print(acs2022.shape)
 acs2022.to_csv("./outputs/acs2022.csv", index = False)
 
+# 2023
+pop2023.shape
+hh2023.shape
+median_inc2023.shape
+pop_nhwhite2023.shape
+aland2010.shape
+
+acs2023 = pop2023.merge(hh2023, on=['bg2010', 'year'], how='left').merge(median_inc2023, on=['bg2010', 'year'], how='left').merge(
+    pop_nhwhite2023, on=['bg2010', 'year'], how="left").merge(aland2010, on=['bg2010'],  how="left")
+acs2023['pop_den_acre'] = acs2023["population"] / acs2023["area_acres"]
+acs2023['hh_den_acre'] = acs2023["households"] / acs2023["area_acres"]
+acs2023['pct_minority'] = 1 - (acs2023["pop_nhwhite"] / acs2023["population"])
+acs2023 = acs2023[["bg2010", "area_sqmi", "area_acres", "hh_den_acre", "pop_den_acre", "median_income", "median_income_2022dollars", "pct_minority", "year"]]
+print(acs2023.head())
+print(acs2023.shape)
+acs2023.to_csv("./outputs/acs2023.csv", index = False)
+
+
 print("All done, check outputs for files...")
+
