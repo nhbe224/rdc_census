@@ -7,7 +7,6 @@ setwd("D:/neeco/rdc_census/sld_change_file/")
 library(tidyverse)
 library(data.table)
 library(sf)
-library(foreach)
 library(tigris)
 library(foreign)
 
@@ -65,13 +64,16 @@ sld_change_file <- rbind(sld_v2, sld_v3)
 
 ## Get percentages for r_wages and e_wages
 sld_change_file <- sld_change_file %>%
-  mutate(r_lowwagewk_pct = r_lowwagewk / population,
-         r_medwagewk_pct = r_medwagewk / population,
-         r_hiwagewk_pct = r_hiwagewk / population,
+  mutate(r_lowwagewk_pct = r_lowwagewk / workers,
+         r_medwagewk_pct = r_medwagewk / workers,
+         r_hiwagewk_pct = r_hiwagewk / workers,
          e_lowwagewk_pct = e_lowwagewk / employment,
          e_medwagewk_pct = e_medwagewk / employment,
-         e_hiwagewk_pct = e_hiwagewk / employment) %>%
-  select(-r_lowwagewk, -r_medwagewk, -r_hiwagewk, -e_lowwagewk, -e_medwagewk, -e_hiwagewk)
+         e_hiwagewk_pct = e_hiwagewk / employment)
+
+sld_change_file_bounded <- sld_change_file %>% 
+  filter(r_lowwagewk_pct >= 0 & r_lowwagewk_pct <= 1,
+         e_lowwagewk_pct >= 0 & e_lowwagewk_pct <= 1)
 
 ## Get SLD V2 and SLD V3 separately
 sld_v2 <- sld_change_file %>%
@@ -79,7 +81,7 @@ sld_v2 <- sld_change_file %>%
 
 sld_v3 <- sld_change_file %>%
   filter(year == 2018)
-
+  
 
 # Examine San Diego -------------------------------------------------------
 san_diego_fips <- "06073"

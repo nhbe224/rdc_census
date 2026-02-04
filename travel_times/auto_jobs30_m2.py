@@ -1,7 +1,4 @@
 # Get jobs within 30 minutes of driving by Census tract
-# Gives us employment density, Employment Entropy (Use EPA Definition),
-# Employment and Housing Entropy, Employment + Household Density (from ACS), and Employment + Population Density (from ACS)
-
 
 # Load Libraries
 import os
@@ -23,7 +20,7 @@ pd.set_option('display.max_colwidth', None)
 os.chdir('D:/neeco/rdc_census/travel_times/')
 
 # Read in tract to tract travel times
-travel_times_load = pd.read_csv("./inputs/travel_times_load.csv")
+travel_times_load = pd.read_stata("../to_rdc/travel_times.dta")
 
 # Read in crosswalk files
 nhgis_blk2000_tr2010 = pd.read_csv("./inputs/nhgis_blk2000_tr2010.csv")
@@ -72,12 +69,13 @@ states_list = [state.lower() for state in states_list]
 states_list
 
 # Clean travel times data so it's 30 minutes and under
-travel_times = travel_times_load[['from_tract', 'to_tract', 'minutes']]
+travel_times = travel_times_load[['home_tr2010', 'work_tr2010', 'minutes']]
 travel_times = travel_times[travel_times['minutes'] <= 30]
-travel_times['from_tract'] = travel_times['from_tract'].astype(str).apply(add_leading_zero)
-travel_times['to_tract'] = travel_times['to_tract'].astype(str).apply(add_leading_zero)
+travel_times['home_tr2010'] = travel_times['home_tr2010'].astype(str).apply(add_leading_zero)
+travel_times['work_tr2010'] = travel_times['work_tr2010'].astype(str).apply(add_leading_zero)
+travel_times.to_csv("./travel_times_for_m2.csv", index = False)
 
-# This only goes from 2002 to 2022
+# This only goes from 2002 to 2023
 # 2002
 print("Getting 2002 employment data...")
 emp_load = []
@@ -120,9 +118,9 @@ emp2002 = emp2002.rename(columns={'tr2010ge': 'tr2010'})
 emp2002 = emp2002.drop(["weight"], axis = 1)
 
 # Merge with travel times
-emp2002 = pd.merge(travel_times, emp2002, left_on='to_tract', right_on='tr2010', how='left')
-emp2002 = emp2002[["from_tract", "emp_tot"]]
-emp2002 = emp2002.groupby("from_tract", as_index=False).sum()
+emp2002 = pd.merge(travel_times, emp2002, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2002 = emp2002[["home_tr2010", "emp_tot"]]
+emp2002 = emp2002.groupby("home_tr2010", as_index=False).sum()
 
 ## Add year column
 emp2002['year'] = 2002
@@ -171,9 +169,9 @@ emp2003 = emp2003.rename(columns={'tr2010ge': 'tr2010'})
 emp2003 = emp2003.drop(["weight"], axis = 1)
 
 # Merge with travel times
-emp2003 = pd.merge(travel_times, emp2003, left_on='to_tract', right_on='tr2010', how='left')
-emp2003 = emp2003[["from_tract", "emp_tot"]]
-emp2003 = emp2003.groupby("from_tract", as_index=False).sum()
+emp2003 = pd.merge(travel_times, emp2003, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2003 = emp2003[["home_tr2010", "emp_tot"]]
+emp2003 = emp2003.groupby("home_tr2010", as_index=False).sum()
 
 ## Add year column
 emp2003['year'] = 2003
@@ -223,15 +221,14 @@ emp2004 = emp2004.rename(columns={'tr2010ge': 'tr2010'})
 emp2004 = emp2004.drop(["weight"], axis = 1)
 
 # Merge with travel times
-emp2004 = pd.merge(travel_times, emp2004, left_on='to_tract', right_on='tr2010', how='left')
-emp2004 = emp2004[["from_tract", "emp_tot"]]
-emp2004 = emp2004.groupby("from_tract", as_index=False).sum()
+emp2004 = pd.merge(travel_times, emp2004, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2004 = emp2004[["home_tr2010", "emp_tot"]]
+emp2004 = emp2004.groupby("home_tr2010", as_index=False).sum()
 
 ## Add year column
 emp2004['year'] = 2004
 emp2004.columns = ['tr2010', 'auto_jobs30_m2', 'year']
 print(emp2004.head())
-
 
 # 2005
 print("Getting 2005 employment data...")
@@ -275,9 +272,9 @@ emp2005 = emp2005.rename(columns={'tr2010ge': 'tr2010'})
 emp2005 = emp2005.drop(["weight"], axis = 1)
 
 # Merge with travel times
-emp2005 = pd.merge(travel_times, emp2005, left_on='to_tract', right_on='tr2010', how='left')
-emp2005 = emp2005[["from_tract", "emp_tot"]]
-emp2005 = emp2005.groupby("from_tract", as_index=False).sum()
+emp2005 = pd.merge(travel_times, emp2005, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2005 = emp2005[["home_tr2010", "emp_tot"]]
+emp2005 = emp2005.groupby("home_tr2010", as_index=False).sum()
 
 ## Add year column
 emp2005['year'] = 2005
@@ -327,9 +324,9 @@ emp2006 = emp2006.rename(columns={'tr2010ge': 'tr2010'})
 emp2006 = emp2006.drop(["weight"], axis = 1)
 
 # Merge with travel times
-emp2006 = pd.merge(travel_times, emp2006, left_on='to_tract', right_on='tr2010', how='left')
-emp2006 = emp2006[["from_tract", "emp_tot"]]
-emp2006 = emp2006.groupby("from_tract", as_index=False).sum()
+emp2006 = pd.merge(travel_times, emp2006, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2006 = emp2006[["home_tr2010", "emp_tot"]]
+emp2006 = emp2006.groupby("home_tr2010", as_index=False).sum()
 
 ## Add year column
 emp2006['year'] = 2006
@@ -379,9 +376,9 @@ emp2007 = emp2007.rename(columns={'tr2010ge': 'tr2010'})
 emp2007 = emp2007.drop(["weight"], axis = 1)
 
 # Merge with travel times
-emp2007 = pd.merge(travel_times, emp2007, left_on='to_tract', right_on='tr2010', how='left')
-emp2007 = emp2007[["from_tract", "emp_tot"]]
-emp2007 = emp2007.groupby("from_tract", as_index=False).sum()
+emp2007 = pd.merge(travel_times, emp2007, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2007 = emp2007[["home_tr2010", "emp_tot"]]
+emp2007 = emp2007.groupby("home_tr2010", as_index=False).sum()
 
 ## Add year column
 emp2007['year'] = 2007
@@ -431,9 +428,9 @@ emp2008 = emp2008.rename(columns={'tr2010ge': 'tr2010'})
 emp2008 = emp2008.drop(["weight"], axis = 1)
 
 # Merge with travel times
-emp2008 = pd.merge(travel_times, emp2008, left_on='to_tract', right_on='tr2010', how='left')
-emp2008 = emp2008[["from_tract", "emp_tot"]]
-emp2008 = emp2008.groupby("from_tract", as_index=False).sum()
+emp2008 = pd.merge(travel_times, emp2008, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2008 = emp2008[["home_tr2010", "emp_tot"]]
+emp2008 = emp2008.groupby("home_tr2010", as_index=False).sum()
 
 ## Add year column
 emp2008['year'] = 2008
@@ -483,9 +480,9 @@ emp2009 = emp2009.rename(columns={'tr2010ge': 'tr2010'})
 emp2009 = emp2009.drop(["weight"], axis = 1)
 
 # Merge with travel times
-emp2009 = pd.merge(travel_times, emp2009, left_on='to_tract', right_on='tr2010', how='left')
-emp2009 = emp2009[["from_tract", "emp_tot"]]
-emp2009 = emp2009.groupby("from_tract", as_index=False).sum()
+emp2009 = pd.merge(travel_times, emp2009, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2009 = emp2009[["home_tr2010", "emp_tot"]]
+emp2009 = emp2009.groupby("home_tr2010", as_index=False).sum()
 
 ## Add year column
 emp2009['year'] = 2009
@@ -527,9 +524,9 @@ emp2010['tr2010'] = emp2010['tr2010'].apply(add_leading_zero)
 emp2010 = emp2010.groupby('tr2010').sum().reset_index()
 
 # Merge with travel times
-emp2010 = pd.merge(travel_times, emp2010, left_on='to_tract', right_on='tr2010', how='left')
-emp2010 = emp2010[["from_tract", "emp_tot"]]
-emp2010 = emp2010.groupby("from_tract", as_index=False).sum()
+emp2010 = pd.merge(travel_times, emp2010, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2010 = emp2010[["home_tr2010", "emp_tot"]]
+emp2010 = emp2010.groupby("home_tr2010", as_index=False).sum()
 
 ## Add year column
 emp2010['year'] = 2010
@@ -572,9 +569,9 @@ emp2011['tr2010'] = emp2011['tr2010'].apply(add_leading_zero)
 emp2011 = emp2011.groupby('tr2010').sum().reset_index()
 
 # Merge with travel times
-emp2011 = pd.merge(travel_times, emp2011, left_on='to_tract', right_on='tr2010', how='left')
-emp2011 = emp2011[["from_tract", "emp_tot"]]
-emp2011 = emp2011.groupby("from_tract", as_index=False).sum()
+emp2011 = pd.merge(travel_times, emp2011, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2011 = emp2011[["home_tr2010", "emp_tot"]]
+emp2011 = emp2011.groupby("home_tr2010", as_index=False).sum()
 
 ## Add year column
 emp2011['year'] = 2011
@@ -599,25 +596,27 @@ emp_load = pd.concat(emp_load)
 emp_load2012 = emp_load.reset_index()
 
 ## Calculate employment by industry
-emp_load2012["blk2012"] = emp_load2012["w_geocode"]
+emp_load2012["blk2010"] = emp_load2012["w_geocode"]
 emp_load2012["emp_tot"] = emp_load2012["C000"]
 
 ## Rename columns
-emp_load2012 = emp_load2012[["blk2012", "emp_tot"]]
+emp_load2012 = emp_load2012[["blk2010", "emp_tot"]]
 
 ## Convert blk2012 to string
-emp_load2012['blk2012'] = emp_load2012['blk2012'].astype(str)
+emp_load2012['blk2010'] = emp_load2012['blk2010'].astype(str)
 ## Remove last three characters
-emp_load2012['tr2010'] = emp_load2012['blk2012'].str[:-4]
+emp_load2012['tr2010'] = emp_load2012['blk2010'].str[:-4]
 emp2012 = emp_load2012[['tr2010', 'emp_tot']]
 ## Add leading zeros
 emp2012['tr2010'] = emp2012['tr2010'].apply(add_leading_zero)
 ## Group by tr2010 and sum emp_tot to get total employment by tract
 emp2012 = emp2012.groupby('tr2010').sum().reset_index()
+
 # Merge with travel times
-emp2012 = pd.merge(travel_times, emp2012, left_on='to_tract', right_on='tr2010', how='left')
-emp2012 = emp2012[["from_tract", "emp_tot"]]
-emp2012 = emp2012.groupby("from_tract", as_index=False).sum()
+emp2012 = pd.merge(travel_times, emp2012, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2012 = emp2012[["home_tr2010", "emp_tot"]]
+emp2012 = emp2012.groupby("home_tr2010", as_index=False).sum()
+
 ## Add year column
 emp2012['year'] = 2012
 emp2012.columns = ['tr2010', 'auto_jobs30_m2', 'year']
@@ -641,25 +640,26 @@ emp_load = pd.concat(emp_load)
 emp_load2013 = emp_load.reset_index()
 
 ## Calculate employment by industry
-emp_load2013["blk2013"] = emp_load2013["w_geocode"]
+emp_load2013["blk2010"] = emp_load2013["w_geocode"]
 emp_load2013["emp_tot"] = emp_load2013["C000"]
 
 ## Rename columns
-emp_load2013 = emp_load2013[["blk2013", "emp_tot"]]
+emp_load2013 = emp_load2013[["blk2010", "emp_tot"]]
 
 ## Convert blk2013 to string
-emp_load2013['blk2013'] = emp_load2013['blk2013'].astype(str)
+emp_load2013['blk2010'] = emp_load2013['blk2010'].astype(str)
 ## Remove last three characters
-emp_load2013['tr2010'] = emp_load2013['blk2013'].str[:-4]
+emp_load2013['tr2010'] = emp_load2013['blk2010'].str[:-4]
 emp2013 = emp_load2013[['tr2010', 'emp_tot']]
 ## Add leading zeros
 emp2013['tr2010'] = emp2013['tr2010'].apply(add_leading_zero)
 ## Group by tr2010 and sum emp_tot to get total employment by tract
 emp2013 = emp2013.groupby('tr2010').sum().reset_index()
+
 # Merge with travel times
-emp2013 = pd.merge(travel_times, emp2013, left_on='to_tract', right_on='tr2010', how='left')
-emp2013 = emp2013[["from_tract", "emp_tot"]]
-emp2013 = emp2013.groupby("from_tract", as_index=False).sum()
+emp2013 = pd.merge(travel_times, emp2013, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2013 = emp2013[["home_tr2010", "emp_tot"]]
+emp2013 = emp2013.groupby("home_tr2010", as_index=False).sum()
 
 ## Add year column
 emp2013['year'] = 2013
@@ -684,25 +684,26 @@ emp_load = pd.concat(emp_load)
 emp_load2014 = emp_load.reset_index()
 
 ## Calculate employment by industry
-emp_load2014["blk2014"] = emp_load2014["w_geocode"]
+emp_load2014["blk2010"] = emp_load2014["w_geocode"]
 emp_load2014["emp_tot"] = emp_load2014["C000"]
 
 ## Rename columns
-emp_load2014 = emp_load2014[["blk2014", "emp_tot"]]
+emp_load2014 = emp_load2014[["blk2010", "emp_tot"]]
 
 ## Convert blk2014 to string
-emp_load2014['blk2014'] = emp_load2014['blk2014'].astype(str)
+emp_load2014['blk2010'] = emp_load2014['blk2010'].astype(str)
 ## Remove last three characters
-emp_load2014['tr2010'] = emp_load2014['blk2014'].str[:-4]
+emp_load2014['tr2010'] = emp_load2014['blk2010'].str[:-4]
 emp2014 = emp_load2014[['tr2010', 'emp_tot']]
 ## Add leading zeros
 emp2014['tr2010'] = emp2014['tr2010'].apply(add_leading_zero)
 ## Group by tr2010 and sum emp_tot to get total employment by tract
 emp2014 = emp2014.groupby('tr2010').sum().reset_index()
+
 # Merge with travel times
-emp2014 = pd.merge(travel_times, emp2014, left_on='to_tract', right_on='tr2010', how='left')
-emp2014 = emp2014[["from_tract", "emp_tot"]]
-emp2014 = emp2014.groupby("from_tract", as_index=False).sum()
+emp2014 = pd.merge(travel_times, emp2014, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2014 = emp2014[["home_tr2010", "emp_tot"]]
+emp2014 = emp2014.groupby("home_tr2010", as_index=False).sum()
 
 ## Add year column
 emp2014['year'] = 2014
@@ -728,16 +729,16 @@ emp_load = pd.concat(emp_load)
 emp_load2015 = emp_load.reset_index()
 
 ## Calculate employment by industry
-emp_load2015["blk2015"] = emp_load2015["w_geocode"]
+emp_load2015["blk2010"] = emp_load2015["w_geocode"]
 emp_load2015["emp_tot"] = emp_load2015["C000"]
 
 ## Rename columns
-emp_load2015 = emp_load2015[["blk2015", "emp_tot"]]
+emp_load2015 = emp_load2015[["blk2010", "emp_tot"]]
 
 ## Convert blk2015 to string
-emp_load2015['blk2015'] = emp_load2015['blk2015'].astype(str)
+emp_load2015['blk2010'] = emp_load2015['blk2010'].astype(str)
 ## Remove last three characters
-emp_load2015['tr2010'] = emp_load2015['blk2015'].str[:-4]
+emp_load2015['tr2010'] = emp_load2015['blk2010'].str[:-4]
 emp2015 = emp_load2015[['tr2010', 'emp_tot']]
 ## Add leading zeros
 emp2015['tr2010'] = emp2015['tr2010'].apply(add_leading_zero)
@@ -745,9 +746,9 @@ emp2015['tr2010'] = emp2015['tr2010'].apply(add_leading_zero)
 emp2015 = emp2015.groupby('tr2010').sum().reset_index()
 
 # Merge with travel times
-emp2015 = pd.merge(travel_times, emp2015, left_on='to_tract', right_on='tr2010', how='left')
-emp2015 = emp2015[["from_tract", "emp_tot"]]
-emp2015 = emp2015.groupby("from_tract", as_index=False).sum()
+emp2015 = pd.merge(travel_times, emp2015, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2015 = emp2015[["home_tr2010", "emp_tot"]]
+emp2015 = emp2015.groupby("home_tr2010", as_index=False).sum()
 
 ## Add year column
 emp2015['year'] = 2015
@@ -773,25 +774,26 @@ emp_load = pd.concat(emp_load)
 emp_load2016 = emp_load.reset_index()
 
 ## Calculate employment by industry
-emp_load2016["blk2016"] = emp_load2016["w_geocode"]
+emp_load2016["blk2010"] = emp_load2016["w_geocode"]
 emp_load2016["emp_tot"] = emp_load2016["C000"]
 
 ## Rename columns
-emp_load2016 = emp_load2016[["blk2016", "emp_tot"]]
+emp_load2016 = emp_load2016[["blk2010", "emp_tot"]]
 
 ## Convert blk2016 to string
-emp_load2016['blk2016'] = emp_load2016['blk2016'].astype(str)
+emp_load2016['blk2010'] = emp_load2016['blk2010'].astype(str)
 ## Remove last three characters
-emp_load2016['tr2010'] = emp_load2016['blk2016'].str[:-4]
+emp_load2016['tr2010'] = emp_load2016['blk2010'].str[:-4]
 emp2016 = emp_load2016[['tr2010', 'emp_tot']]
 ## Add leading zeros
 emp2016['tr2010'] = emp2016['tr2010'].apply(add_leading_zero)
 ## Group by tr2010 and sum emp_tot to get total employment by tract
 emp2016 = emp2016.groupby('tr2010').sum().reset_index()
+
 # Merge with travel times
-emp2016 = pd.merge(travel_times, emp2016, left_on='to_tract', right_on='tr2010', how='left')
-emp2016 = emp2016[["from_tract", "emp_tot"]]
-emp2016 = emp2016.groupby("from_tract", as_index=False).sum()
+emp2016 = pd.merge(travel_times, emp2016, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2016 = emp2016[["home_tr2010", "emp_tot"]]
+emp2016 = emp2016.groupby("home_tr2010", as_index=False).sum()
 
 ## Add year column
 emp2016['year'] = 2016
@@ -816,25 +818,26 @@ emp_load = pd.concat(emp_load)
 emp_load2017 = emp_load.reset_index()
 
 ## Calculate employment by industry
-emp_load2017["blk2017"] = emp_load2017["w_geocode"]
+emp_load2017["blk2010"] = emp_load2017["w_geocode"]
 emp_load2017["emp_tot"] = emp_load2017["C000"]
 
 ## Rename columns
-emp_load2017 = emp_load2017[["blk2017", "emp_tot"]]
+emp_load2017 = emp_load2017[["blk2010", "emp_tot"]]
 
 ## Convert blk2017 to string
-emp_load2017['blk2017'] = emp_load2017['blk2017'].astype(str)
+emp_load2017['blk2010'] = emp_load2017['blk2010'].astype(str)
 ## Remove last three characters
-emp_load2017['tr2010'] = emp_load2017['blk2017'].str[:-4]
+emp_load2017['tr2010'] = emp_load2017['blk2010'].str[:-4]
 emp2017 = emp_load2017[['tr2010', 'emp_tot']]
 ## Add leading zeros
 emp2017['tr2010'] = emp2017['tr2010'].apply(add_leading_zero)
 ## Group by tr2010 and sum emp_tot to get total employment by tract
 emp2017 = emp2017.groupby('tr2010').sum().reset_index()
+
 # Merge with travel times
-emp2017 = pd.merge(travel_times, emp2017, left_on='to_tract', right_on='tr2010', how='left')
-emp2017 = emp2017[["from_tract", "emp_tot"]]
-emp2017 = emp2017.groupby("from_tract", as_index=False).sum()
+emp2017 = pd.merge(travel_times, emp2017, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2017 = emp2017[["home_tr2010", "emp_tot"]]
+emp2017 = emp2017.groupby("home_tr2010", as_index=False).sum()
 
 ## Add year column
 emp2017['year'] = 2017
@@ -860,25 +863,26 @@ emp_load = pd.concat(emp_load)
 emp_load2018 = emp_load.reset_index()
 
 ## Calculate employment by industry
-emp_load2018["blk2018"] = emp_load2018["w_geocode"]
+emp_load2018["blk2010"] = emp_load2018["w_geocode"]
 emp_load2018["emp_tot"] = emp_load2018["C000"]
 
 ## Rename columns
-emp_load2018 = emp_load2018[["blk2018", "emp_tot"]]
+emp_load2018 = emp_load2018[["blk2010", "emp_tot"]]
 
 ## Convert blk2018 to string
-emp_load2018['blk2018'] = emp_load2018['blk2018'].astype(str)
+emp_load2018['blk2010'] = emp_load2018['blk2010'].astype(str)
 ## Remove last three characters
-emp_load2018['tr2010'] = emp_load2018['blk2018'].str[:-4]
+emp_load2018['tr2010'] = emp_load2018['blk2010'].str[:-4]
 emp2018 = emp_load2018[['tr2010', 'emp_tot']]
 ## Add leading zeros
 emp2018['tr2010'] = emp2018['tr2010'].apply(add_leading_zero)
 ## Group by tr2010 and sum emp_tot to get total employment by tract
 emp2018 = emp2018.groupby('tr2010').sum().reset_index()
+
 # Merge with travel times
-emp2018 = pd.merge(travel_times, emp2018, left_on='to_tract', right_on='tr2010', how='left')
-emp2018 = emp2018[["from_tract", "emp_tot"]]
-emp2018 = emp2018.groupby("from_tract", as_index=False).sum()
+emp2018 = pd.merge(travel_times, emp2018, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2018 = emp2018[["home_tr2010", "emp_tot"]]
+emp2018 = emp2018.groupby("home_tr2010", as_index=False).sum()
 
 ## Add year column
 emp2018['year'] = 2018
@@ -904,25 +908,26 @@ emp_load = pd.concat(emp_load)
 emp_load2019 = emp_load.reset_index()
 
 ## Calculate employment by industry
-emp_load2019["blk2019"] = emp_load2019["w_geocode"]
+emp_load2019["blk2010"] = emp_load2019["w_geocode"]
 emp_load2019["emp_tot"] = emp_load2019["C000"]
 
 ## Rename columns
-emp_load2019 = emp_load2019[["blk2019", "emp_tot"]]
+emp_load2019 = emp_load2019[["blk2010", "emp_tot"]]
 
 ## Convert blk2019 to string
-emp_load2019['blk2019'] = emp_load2019['blk2019'].astype(str)
+emp_load2019['blk2010'] = emp_load2019['blk2010'].astype(str)
 ## Remove last three characters
-emp_load2019['tr2010'] = emp_load2019['blk2019'].str[:-4]
+emp_load2019['tr2010'] = emp_load2019['blk2010'].str[:-4]
 emp2019 = emp_load2019[['tr2010', 'emp_tot']]
 ## Add leading zeros
 emp2019['tr2010'] = emp2019['tr2010'].apply(add_leading_zero)
 ## Group by tr2010 and sum emp_tot to get total employment by tract
 emp2019 = emp2019.groupby('tr2010').sum().reset_index()
+
 # Merge with travel times
-emp2019 = pd.merge(travel_times, emp2019, left_on='to_tract', right_on='tr2010', how='left')
-emp2019 = emp2019[["from_tract", "emp_tot"]]
-emp2019 = emp2019.groupby("from_tract", as_index=False).sum()
+emp2019 = pd.merge(travel_times, emp2019, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2019 = emp2019[["home_tr2010", "emp_tot"]]
+emp2019 = emp2019.groupby("home_tr2010", as_index=False).sum()
 
 ## Add year column
 emp2019['year'] = 2019
@@ -972,9 +977,9 @@ emp2020 = emp2020.rename(columns={'tr2010ge': 'tr2010'})
 emp2020 = emp2020.drop(["weight"], axis = 1)
 
 # Merge with travel times
-emp2020 = pd.merge(travel_times, emp2020, left_on='to_tract', right_on='tr2010', how='left')
-emp2020 = emp2020[["from_tract", "emp_tot"]]
-emp2020 = emp2020.groupby("from_tract", as_index=False).sum()
+emp2020 = pd.merge(travel_times, emp2020, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2020 = emp2020[["home_tr2010", "emp_tot"]]
+emp2020 = emp2020.groupby("home_tr2010", as_index=False).sum()
 
 ## Add year column
 emp2020['year'] = 2020
@@ -1023,9 +1028,9 @@ emp2021 = emp2021.rename(columns={'tr2010ge': 'tr2010'})
 emp2021 = emp2021.drop(["weight"], axis = 1)
 
 # Merge with travel times
-emp2021 = pd.merge(travel_times, emp2021, left_on='to_tract', right_on='tr2010', how='left')
-emp2021 = emp2021[["from_tract", "emp_tot"]]
-emp2021 = emp2021.groupby("from_tract", as_index=False).sum()
+emp2021 = pd.merge(travel_times, emp2021, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2021 = emp2021[["home_tr2010", "emp_tot"]]
+emp2021 = emp2021.groupby("home_tr2010", as_index=False).sum()
 
 ## Add year column
 emp2021['year'] = 2021
@@ -1074,22 +1079,73 @@ emp2022 = emp2022.rename(columns={'tr2010ge': 'tr2010'})
 emp2022 = emp2022.drop(["weight"], axis = 1)
 
 # Merge with travel times
-emp2022 = pd.merge(travel_times, emp2022, left_on='to_tract', right_on='tr2010', how='left')
-emp2022 = emp2022[["from_tract", "emp_tot"]]
-emp2022 = emp2022.groupby("from_tract", as_index=False).sum()
+emp2022 = pd.merge(travel_times, emp2022, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2022 = emp2022[["home_tr2010", "emp_tot"]]
+emp2022 = emp2022.groupby("home_tr2010", as_index=False).sum()
 
 ## Add year column
 emp2022['year'] = 2022
 emp2022.columns = ['tr2010', 'auto_jobs30_m2', 'year']
 print(emp2022)
 
+# 2023
+print("Getting 2023 employment data...")
+emp_load = []
+for i in states_list:
+	try:
+		url = 'https://lehd.ces.census.gov/data/lodes/LODES8/' + i + '/wac/' + i + '_wac_S000_JT00_2023.csv.gz' 
+		response = requests.get(url)
+		content = response.content
+		df = pd.read_csv(io.BytesIO(content), sep=",", compression="gzip", index_col=0, quotechar='"')
+		df['state_abb'] = i.upper()
+		emp_load.append(df)
+	except:
+		pass
+
+emp_load = pd.concat(emp_load)
+emp_load2023 = emp_load.reset_index()
+
+## Calculate employment by industry
+emp_load2023["blk2020"] = emp_load2023["w_geocode"]
+emp_load2023["emp_tot"] = emp_load2023["C000"]
+
+## Select columns
+emp_load2023 = emp_load2023[["blk2020", "emp_tot"]]
+
+## Convert blk2020 to string
+emp_load2023['blk2020'] = emp_load2023['blk2020'].astype(str).apply(add_leading_zero)
+
+## Join on crosswalks and aggregate
+emp2023 = pd.merge(emp_load2023, nhgis_blk2020_tr2010, how='left', left_on = "blk2020", right_on = "blk2020ge")
+emp2023 = emp2023[["tr2010ge", "emp_tot", "weight"]]
+## Multiply by weight
+emp_columns = ["emp_tot"]
+emp2023[emp_columns].multiply(emp2023["weight"], axis="index")
+
+## And sum within 2010 tracts
+emp2023 = emp2023.groupby("tr2010ge", as_index=False).sum()
+emp2023 = emp2023.rename(columns={'tr2010ge': 'tr2010'})
+
+## Drop weight column
+emp2023 = emp2023.drop(["weight"], axis = 1)
+
+# Merge with travel times
+emp2023 = pd.merge(travel_times, emp2023, left_on='work_tr2010', right_on='tr2010', how='left')
+emp2023 = emp2023[["home_tr2010", "emp_tot"]]
+emp2023 = emp2023.groupby("home_tr2010", as_index=False).sum()
+
+## Add year column
+emp2023['year'] = 2023
+emp2023.columns = ['tr2010', 'auto_jobs30_m2', 'year']
+print(emp2023)
+
 
 # Concatenate all employemnt data
-empAll = pd.concat([emp2002, emp2003, emp2004, emp2005,
-					 emp2006, emp2007, emp2008, emp2009,
+empAll = pd.concat([emp2005, emp2006, emp2007, emp2008, emp2009,
 					 emp2010, emp2011, emp2012, emp2013,
 					 emp2014, emp2015, emp2016, emp2017,
-					 emp2018, emp2019, emp2020, emp2021, emp2022], ignore_index=True)
+					 emp2018, emp2019, emp2020, emp2021, 
+					 emp2022, emp2023], ignore_index=True)
 
 
 # Write out data

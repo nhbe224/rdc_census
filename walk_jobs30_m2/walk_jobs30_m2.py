@@ -78,169 +78,15 @@ walk_distance_load['to_bg2010'] = walk_distance_load['to_bg2010'].astype(str).ap
 walk_distance = walk_distance_load[["from_bg2010", "to_bg2010", "mi_to_blkgrp"]]
 walk_distance.columns = ["from_bg2010", "to_bg2010", "miles"]
 
-# This only goes from 2002 to 2022
-# 2002
-print("Getting 2002 employment data...")
-emp_load = []
-for i in states_list:
-	try:
-		url = 'https://lehd.ces.census.gov/data/lodes/LODES5/' + i + '/wac/' + i + '_wac_S000_JT00_2002.csv.gz' 
-		response = requests.get(url)
-		content = response.content
-		df = pd.read_csv(io.BytesIO(content), sep=",", compression="gzip", index_col=0, quotechar='"')
-		df['state_abb'] = i.upper()
-		emp_load.append(df)
-	except:
-		pass
+# Account for intrazonals
+intrazonal_df = (walk_distance.groupby('from_bg2010')['miles'].min() / 2).reset_index()
+intrazonal_df["to_bg2010"] = intrazonal_df["from_bg2010"]
+intrazonal_df = intrazonal_df[["from_bg2010", "to_bg2010", "miles"]]
 
-emp_load = pd.concat(emp_load)
-emp_load2002 = emp_load.reset_index()
+# Stack them up
+walk_distance = pd.concat([walk_distance, intrazonal_df])
 
-## Calculate employment by industry
-emp_load2002["blk2000"] = emp_load2002["w_geocode"]
-emp_load2002["emp_tot"] = emp_load2002["C000"]															
-
-## Select columns
-emp_load2002 = emp_load2002[["blk2000", "emp_tot"]]
-
-## Convert blk2000 to string
-emp_load2002['blk2000'] = emp_load2002['blk2000'].astype(str).apply(add_leading_zero)
-
-## Join on crosswalks and aggregate
-emp2002 = pd.merge(emp_load2002, nhgis_blk2000_bg2010, how='left', left_on = "blk2000", right_on = "blk2000ge")
-emp2002 = emp2002[["bg2010ge", "emp_tot",  "weight"]]
-## Multiply by weight
-emp_columns = ["emp_tot"]
-emp2002[emp_columns].multiply(emp2002["weight"], axis="index")
-
-## And sum within 2010 block groups
-emp2002 = emp2002.groupby("bg2010ge", as_index=False).sum()
-emp2002 = emp2002.rename(columns={'bg2010ge': 'bg2010'})
-
-## Drop weight column
-emp2002 = emp2002.drop(["weight"], axis = 1)
-
-# Merge with walk distance
-walk2002_m2 = pd.merge(walk_distance, emp2002, left_on='to_bg2010', right_on='bg2010', how='left')
-
-# Drop NAs
-walk2002_m2 = walk2002_m2.dropna()
-
-walk2002_m2 = walk2002_m2[["from_bg2010", "emp_tot"]]
-walk2002_m2 = walk2002_m2.groupby("from_bg2010", as_index=False).sum()
-
-# Add year
-walk2002_m2['year'] = 2002
-print(walk2002_m2)
-
-# 2003
-print("Getting 2003 employment data...")
-emp_load = []
-for i in states_list:
-	try:
-		url = 'https://lehd.ces.census.gov/data/lodes/LODES5/' + i + '/wac/' + i + '_wac_S000_JT00_2003.csv.gz' 
-		response = requests.get(url)
-		content = response.content
-		df = pd.read_csv(io.BytesIO(content), sep=",", compression="gzip", index_col=0, quotechar='"')
-		df['state_abb'] = i.upper()
-		emp_load.append(df)
-	except:
-		pass
-
-emp_load = pd.concat(emp_load)
-emp_load2003 = emp_load.reset_index()
-
-## Calculate employment by industry
-emp_load2003["blk2000"] = emp_load2003["w_geocode"]
-emp_load2003["emp_tot"] = emp_load2003["C000"]															
-
-## Select columns
-emp_load2003 = emp_load2003[["blk2000", "emp_tot"]]
-
-## Convert blk2000 to string
-emp_load2003['blk2000'] = emp_load2003['blk2000'].astype(str).apply(add_leading_zero)
-
-## Join on crosswalks and aggregate
-emp2003 = pd.merge(emp_load2003, nhgis_blk2000_bg2010, how='left', left_on = "blk2000", right_on = "blk2000ge")
-emp2003 = emp2003[["bg2010ge", "emp_tot",  "weight"]]
-## Multiply by weight
-emp_columns = ["emp_tot"]
-emp2003[emp_columns].multiply(emp2003["weight"], axis="index")
-
-## And sum within 2010 block groups
-emp2003 = emp2003.groupby("bg2010ge", as_index=False).sum()
-emp2003 = emp2003.rename(columns={'bg2010ge': 'bg2010'})
-
-## Drop weight column
-emp2003 = emp2003.drop(["weight"], axis = 1)
-
-# Merge with walk distance
-walk2003_m2 = pd.merge(walk_distance, emp2003, left_on='to_bg2010', right_on='bg2010', how='left')
-
-# Drop NAs
-walk2003_m2 = walk2003_m2.dropna()
-
-walk2003_m2 = walk2003_m2[["from_bg2010", "emp_tot"]]
-walk2003_m2 = walk2003_m2.groupby("from_bg2010", as_index=False).sum()
-
-# Add year
-walk2003_m2['year'] = 2003
-print(walk2003_m2)
-
-# 2004
-print("Getting 2004 employment data...")
-emp_load = []
-for i in states_list:
-	try:
-		url = 'https://lehd.ces.census.gov/data/lodes/LODES5/' + i + '/wac/' + i + '_wac_S000_JT00_2004.csv.gz' 
-		response = requests.get(url)
-		content = response.content
-		df = pd.read_csv(io.BytesIO(content), sep=",", compression="gzip", index_col=0, quotechar='"')
-		df['state_abb'] = i.upper()
-		emp_load.append(df)
-	except:
-		pass
-
-emp_load = pd.concat(emp_load)
-emp_load2004 = emp_load.reset_index()
-
-## Calculate employment by industry
-emp_load2004["blk2000"] = emp_load2004["w_geocode"]
-emp_load2004["emp_tot"] = emp_load2004["C000"]															
-
-## Select columns
-emp_load2004 = emp_load2004[["blk2000", "emp_tot"]]
-
-## Convert blk2000 to string
-emp_load2004['blk2000'] = emp_load2004['blk2000'].astype(str).apply(add_leading_zero)
-
-## Join on crosswalks and aggregate
-emp2004 = pd.merge(emp_load2004, nhgis_blk2000_bg2010, how='left', left_on = "blk2000", right_on = "blk2000ge")
-emp2004 = emp2004[["bg2010ge", "emp_tot",  "weight"]]
-## Multiply by weight
-emp_columns = ["emp_tot"]
-emp2004[emp_columns].multiply(emp2004["weight"], axis="index")
-
-## And sum within 2010 block groups
-emp2004 = emp2004.groupby("bg2010ge", as_index=False).sum()
-emp2004 = emp2004.rename(columns={'bg2010ge': 'bg2010'})
-
-## Drop weight column
-emp2004 = emp2004.drop(["weight"], axis = 1)
-
-# Merge with walk distance
-walk2004_m2 = pd.merge(walk_distance, emp2004, left_on='to_bg2010', right_on='bg2010', how='left')
-
-# Drop NAs
-walk2004_m2 = walk2004_m2.dropna()
-
-walk2004_m2 = walk2004_m2[["from_bg2010", "emp_tot"]]
-walk2004_m2 = walk2004_m2.groupby("from_bg2010", as_index=False).sum()
-
-# Add year
-walk2004_m2['year'] = 2004
-print(walk2004_m2)
-
+# This only goes from 2005 to 2022
 # 2005
 print("Getting 2005 employment data...")
 emp_load = []
@@ -1095,6 +941,69 @@ walkAll = pd.concat([walk2002_m2, walk2003_m2, walk2004_m2, walk2005_m2,
 					 walk2010_m2, walk2011_m2, walk2012_m2, walk2013_m2,
 					 walk2014_m2, walk2015_m2, walk2016_m2, walk2017_m2,
 					 walk2018_m2, walk2019_m2, walk2020_m2, walk2021_m2, walk2022_m2], ignore_index=True)
+
+walkAll.columns = ["bg2010", "walk_jobs30_m2", "year"]
+
+# 2023
+print("Getting 2023 employment data...")
+emp_load = []
+for i in states_list:
+	try:
+		url = 'https://lehd.ces.census.gov/data/lodes/LODES8/' + i + '/wac/' + i + '_wac_S000_JT00_2023.csv.gz' 
+		response = requests.get(url)
+		content = response.content
+		df = pd.read_csv(io.BytesIO(content), sep=",", compression="gzip", index_col=0, quotechar='"')
+		df['state_abb'] = i.upper()
+		emp_load.append(df)
+	except:
+		pass
+
+emp_load = pd.concat(emp_load)
+emp_load2023 = emp_load.reset_index()
+
+## Calculate employment by industry
+emp_load2023["blk2020"] = emp_load2023["w_geocode"]
+emp_load2023["emp_tot"] = emp_load2023["C000"]															
+
+## Select columns
+emp_load2023 = emp_load2023[["blk2020", "emp_tot"]]
+
+## Convert blk2020 to string
+emp_load2023['blk2020'] = emp_load2023['blk2020'].astype(str).apply(add_leading_zero)
+
+## Join on crosswalks and aggregate
+emp2023 = pd.merge(emp_load2023, nhgis_blk2020_bg2010, how='left', left_on = "blk2020", right_on = "blk2020ge")
+emp2023 = emp2023[["bg2010ge", "emp_tot",  "weight"]]
+## Multiply by weight
+emp_columns = ["emp_tot"]
+emp2023[emp_columns].multiply(emp2023["weight"], axis="index")
+
+## And sum within 2010 block groups
+emp2023 = emp2023.groupby("bg2010ge", as_index=False).sum()
+emp2023 = emp2023.rename(columns={'bg2010ge': 'bg2010'})
+
+## Drop weight column
+emp2023 = emp2023.drop(["weight"], axis = 1)
+
+# Merge with walk distance
+walk2023_m2 = pd.merge(walk_distance, emp2023, left_on='to_bg2010', right_on='bg2010', how='left')
+
+# Drop NAs
+walk2023_m2 = walk2023_m2.dropna()
+
+walk2023_m2 = walk2023_m2[["from_bg2010", "emp_tot"]]
+walk2023_m2 = walk2023_m2.groupby("from_bg2010", as_index=False).sum()
+
+# Add year
+walk2023_m2['year'] = 2023
+print(walk2023_m2)
+
+# Concatenate
+walkAll = pd.concat([walk2002_m2, walk2003_m2, walk2004_m2, walk2005_m2,
+					 walk2006_m2, walk2007_m2, walk2008_m2, walk2009_m2,
+					 walk2010_m2, walk2011_m2, walk2012_m2, walk2013_m2,
+					 walk2014_m2, walk2015_m2, walk2016_m2, walk2017_m2,
+					 walk2018_m2, walk2019_m2, walk2020_m2, walk2021_m2, walk2023_m2], ignore_index=True)
 
 walkAll.columns = ["bg2010", "walk_jobs30_m2", "year"]
 

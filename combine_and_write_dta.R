@@ -9,8 +9,7 @@ library(sf)
 library(tidycensus)
 library(tigris)
 library(foreign)
-library(psych)
-options(scipen = 999999)
+options(scipen = 9999)
 
 # ACS Data -------------------------------------------------------------
 acs_file_paths <- list.files("./acs_change_file/outputs/", full.names = TRUE, pattern = "\\.csv$")
